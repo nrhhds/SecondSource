@@ -1,0 +1,115 @@
+{
+  "_comment": "Feed audit 2026-08-17. lean labels are PRIORS for calibration testing only - never passed to the scorer.",
+  "_calibration_note": "News Service of Florida is the wire anchor. Its copy should score near-neutral. NSF is subscription-only; pull its text from republishers with attribution.",
+  "sources": [
+    {
+      "id": "flphoenix",
+      "name": "Florida Phoenix",
+      "feed": "https://floridaphoenix.com/feed/",
+      "status": "ready",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "left",
+      "notes": "CC-licensed. States Newsroom."
+    },
+    {
+      "id": "capitolist",
+      "name": "The Capitolist",
+      "feed": "https://thecapitolist.com/feed/",
+      "status": "ready",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "right"
+    },
+    {
+      "id": "flvoice",
+      "name": "Florida's Voice",
+      "feed": "https://flvoicenews.com/feed/",
+      "status": "ready",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "right"
+    },
+    {
+      "id": "flpolitics",
+      "name": "Florida Politics",
+      "feed": "https://floridapolitics.com/feed/",
+      "status": "needs_ua",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "center",
+      "notes": "Returns 402 to bot UA. Set a real UA and rate limit."
+    },
+    {
+      "id": "nsf",
+      "name": "News Service of Florida",
+      "feed": "https://newsserviceflorida.com/search/?q=&t=article&f=rss",
+      "status": "needs_ua",
+      "fulltext": false,
+      "paywall": "subscription",
+      "prior_lean": "wire",
+      "calibration_anchor": true,
+      "notes": "429 rate-limited. Subscription wire. Pull text from republishers."
+    },
+    {
+      "id": "cns",
+      "name": "Capitol News Service",
+      "feed": "https://www.flanews.com/feed/",
+      "status": "stale_feed",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "center",
+      "notes": "Feed newest item Apr 2025. Scrape homepage instead."
+    },
+    {
+      "id": "wfsu",
+      "name": "WFSU News",
+      "feed": null,
+      "status": "no_feed",
+      "fulltext": true,
+      "paywall": "none",
+      "prior_lean": "center-left",
+      "notes": "NPR Grove platform, no feed found. Use Google News site query."
+    },
+    {
+      "id": "tbtimes",
+      "name": "Tampa Bay Times",
+      "feed": "https://www.tampabay.com/arc/outboundfeeds/rss/?outputType=xml",
+      "status": "headlines_only",
+      "fulltext": false,
+      "paywall": "hard",
+      "prior_lean": "center-left",
+      "notes": "Arc feed works but headline+dek only."
+    },
+    {
+      "id": "miamiherald",
+      "name": "Miami Herald",
+      "feed": null,
+      "status": "deferred_v1",
+      "fulltext": false,
+      "paywall": "hard",
+      "prior_lean": "center-left",
+      "notes": "McClatchy. 403 to fetcher, hard paywall."
+    },
+    {
+      "id": "orlandosentinel",
+      "name": "Orlando Sentinel",
+      "feed": null,
+      "status": "deferred_v1",
+      "fulltext": false,
+      "paywall": "hard",
+      "prior_lean": "center",
+      "notes": "Tribune. 403 to fetcher, hard paywall."
+    },
+    {
+      "id": "talldemocrat",
+      "name": "Tallahassee Democrat",
+      "feed": null,
+      "status": "deferred_v1",
+      "fulltext": false,
+      "paywall": "hard",
+      "prior_lean": "center",
+      "notes": "Gannett. 403 to fetcher, hard paywall."
+    }
+  ]
+}
