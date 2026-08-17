@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Second Source</title>
+<meta name="description" content="Article-level analysis of how Florida politics gets covered. Launching March 2, 2027.">
+<style>
+  :root {
+    --bg: #fbfbf9;
+    --fg: #1a1a18;
+    --muted: #6b6b63;
+    --rule: #dedcd4;
+    --accent: #8a5a2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #ececea;
+      --muted: #9a9a93;
+      --rule: #2e2e34;
+      --accent: #d3a26a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 ui-serif, Georgia, "Times New Roman", serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 3rem;
+  }
+  h1 {
+    font-size: 1.9rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.35rem;
+  }
+  .tagline {
+    color: var(--muted);
+    margin: 0 0 2.25rem;
+  }
+  hr {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 2.25rem 0;
+  }
+  h2 {
+    font-size: 0.75rem;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted);
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+  }
+  p { margin: 0 0 1rem; }
+  ul { margin: 0 0 1rem; padding-left: 1.1rem; }
+  li { margin-bottom: 0.5rem; }
+  .launch {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+  }
+  .launch strong { color: var(--accent); }
+  footer {
+    margin-top: 2.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Second Source</h1>
+  <p class="tagline">Article-level analysis of how Florida politics gets covered.</p>
+
+  <p class="launch">Launching <strong>March 2, 2027</strong>, the opening of Florida&rsquo;s regular session.</p>
+
+  <hr>
+
+  <h2>Method</h2>
+  <p>
+    Coverage is scored blind. Outlet name, byline, URL, and identifying
+    boilerplate are stripped before any text reaches the model, so a score
+    reflects the article rather than its masthead.
+  </p>
+  <p>
+    Published output is computed counts and verbatim quotes with links back to
+    the original. Nothing is republished here, and no summary is written on a
+    publication&rsquo;s behalf.
+  </p>
+
+  <h2>Before launch</h2>
+  <p>The engine is not considered working until it clears three tests:</p>
+  <ul>
+    <li>Wire copy from the News Service of Florida scores near&#8209;neutral.</li>
+    <li>Outlets separate in expected directions, with symmetric magnitude.</li>
+    <li>Swapping party names and actor identities reverses direction without changing magnitude.</li>
+  </ul>
+  <p>Results of those tests will be published, including run&#8209;to&#8209;run variance.</p>
+
+  <footer>
+    Rubric and source code are public at
+    <a href="https://github.com/nrhhds/SecondSource">github.com/nrhhds/SecondSource</a>.
+  </footer>
+</main>
+</body>
+</html>
