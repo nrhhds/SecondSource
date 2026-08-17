@@ -4,114 +4,108 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Second Source</title>
-<meta name="description" content="Article-level analysis of how Florida politics gets covered. Launching March 2, 2027.">
-<style>
-  :root {
-    --bg: #fbfbf9;
-    --fg: #1a1a18;
-    --muted: #6b6b63;
-    --rule: #dedcd4;
-    --accent: #8a5a2b;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #16161a;
-      --fg: #ececea;
-      --muted: #9a9a93;
-      --rule: #2e2e34;
-      --accent: #d3a26a;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font: 16px/1.65 ui-serif, Georgia, "Times New Roman", serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  main {
-    max-width: 34rem;
-    margin: 0 auto;
-    padding: 4rem 1.5rem 3rem;
-  }
-  h1 {
-    font-size: 1.9rem;
-    letter-spacing: -0.01em;
-    margin: 0 0 0.35rem;
-  }
-  .tagline {
-    color: var(--muted);
-    margin: 0 0 2.25rem;
-  }
-  hr {
-    border: 0;
-    border-top: 1px solid var(--rule);
-    margin: 2.25rem 0;
-  }
-  h2 {
-    font-size: 0.75rem;
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--muted);
-    margin: 0 0 0.75rem;
-    font-weight: 600;
-  }
-  p { margin: 0 0 1rem; }
-  ul { margin: 0 0 1rem; padding-left: 1.1rem; }
-  li { margin-bottom: 0.5rem; }
-  .launch {
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 0.95rem;
-  }
-  .launch strong { color: var(--accent); }
-  footer {
-    margin-top: 2.75rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--rule);
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-  a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-  a:hover { text-decoration-color: var(--accent); }
-</style>
+<meta name="description" content="Article-level analysis of how Florida politics gets covered. Coverage is scored blind. Launching March 2, 2027.">
+<meta property="og:title" content="Second Source">
+<meta property="og:description" content="Article-level analysis of how Florida politics gets covered. Coverage is scored blind.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://chooseyourbias.com/">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <h1>Second Source</h1>
-  <p class="tagline">Article-level analysis of how Florida politics gets covered.</p>
 
-  <p class="launch">Launching <strong>March 2, 2027</strong>, the opening of Florida&rsquo;s regular session.</p>
+<div class="topbar">
+  <div class="in">
+    <span class="dot">●</span>
+    <span>Pre-launch</span>
+    <span class="fill quiet">Florida&rsquo;s regular session convenes March 2, 2027.</span>
+  </div>
+</div>
 
-  <hr>
+<div class="shell shell--narrow">
 
-  <h2>Method</h2>
-  <p>
-    Coverage is scored blind. Outlet name, byline, URL, and identifying
-    boilerplate are stripped before any text reaches the model, so a score
-    reflects the article rather than its masthead.
-  </p>
-  <p>
-    Published output is computed counts and verbatim quotes with links back to
-    the original. Nothing is republished here, and no summary is written on a
-    publication&rsquo;s behalf.
-  </p>
+  <header class="masthead">
+    <span class="wordmark">Second<span>.</span>Source</span>
+    <span class="domain">chooseyourbias.com</span>
+  </header>
 
-  <h2>Before launch</h2>
-  <p>The engine is not considered working until it clears three tests:</p>
-  <ul>
-    <li>Wire copy from the News Service of Florida scores near&#8209;neutral.</li>
-    <li>Outlets separate in expected directions, with symmetric magnitude.</li>
-    <li>Swapping party names and actor identities reverses direction without changing magnitude.</li>
-  </ul>
-  <p>Results of those tests will be published, including run&#8209;to&#8209;run variance.</p>
+  <div class="hero">
+    <h1>Article-level analysis of how Florida politics gets covered.</h1>
+    <p>Not whether a story is true. Who got quoted, how far down the opposing
+      view appears, which claims trace back to a document, and what one outlet
+      left out that the rest of the coverage carried.</p>
+  </div>
 
-  <footer>
-    Rubric and source code are public at
-    <a href="https://github.com/nrhhds/SecondSource">github.com/nrhhds/SecondSource</a>.
+  <div class="sec"><h2>The one rule that matters</h2></div>
+  <div class="prose">
+    <p>
+      The scorer never sees who wrote the article. Outlet name, masthead
+      references, byline, author bio, source URL and boilerplate are stripped
+      before a single word reaches the model. A score describes the text in front
+      of it, not the reputation attached to it.
+    </p>
+    <p>
+      Published output is counts the code computed and verbatim quotes with links
+      back to the original. Nothing is republished here, and no summary is written
+      on a publication&rsquo;s behalf.
+    </p>
+  </div>
+
+  <div class="sec"><h2>Nothing publishes until these pass</h2><span class="count">status: not run</span></div>
+
+  <div class="statrow">
+    <div><div class="k">Wire anchor</div><div class="v">&mdash; <small>not run</small></div></div>
+    <div><div class="k">Separation</div><div class="v">&mdash; <small>not run</small></div></div>
+    <div><div class="k">Valence swap</div><div class="v">&mdash; <small>not run</small></div></div>
+    <div><div class="k">Test&ndash;retest</div><div class="v">&mdash; <small>not run</small></div></div>
+  </div>
+
+  <div class="prose">
+    <ul>
+      <li><strong>Wire anchor.</strong> Copy from the News Service of Florida is
+        republished across the state and functions as the zero point. If it
+        doesn&rsquo;t score near-neutral, the engine is wrong, not the wire.</li>
+      <li><strong>Known-lean separation.</strong> Outlets should separate in the
+        directions predicted in advance, with symmetric magnitude. Asymmetric
+        magnitude means lean inherited from the model rather than found in the
+        coverage.</li>
+      <li><strong>Valence swap.</strong> Flip party names and actor identities so
+        the structure is identical and the direction reverses. A structural engine
+        returns the same score.</li>
+      <li><strong>Test&ndash;retest.</strong> Every article scored five times, with
+        the variance published rather than hidden.</li>
+    </ul>
+    <p>
+      Results of all four will be published before any coverage analysis is,
+      including the ones that come back badly. The predictions are written down
+      first so they can&rsquo;t be adjusted to fit what comes out.
+    </p>
+  </div>
+
+  <div class="sec"><h2>What this will not do</h2></div>
+  <div class="prose">
+    <ul>
+      <li>Fact-check claims. This measures how a story was reported, not whether it was right.</li>
+      <li>Score opinion columns or editorials.</li>
+      <li>Republish anyone&rsquo;s work. Scores link out.</li>
+      <li>Produce a single composite number before the tests above pass.</li>
+      <li>Let a human approve a score before it publishes.</li>
+    </ul>
+  </div>
+
+  <div class="disclosure">
+    <b>Disclosure.</b> Second Source is written by the owner of Holmes Drafting
+    Services, a permitting and drafting firm. The Florida Building Code, the
+    Florida Building Commission, DBPR, and state preemption of local land-use
+    authority are recused subjects and will not be covered here. The full recusal
+    list publishes with the engine.
+  </div>
+
+  <footer class="foot">
+    The rubric and every line of the engine are public at
+    <a href="https://github.com/nrhhds/SecondSource">github.com/nrhhds/SecondSource</a>,
+    from the first commit onward.
   </footer>
-</main>
+
+</div>
 </body>
 </html>

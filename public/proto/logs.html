@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs — Second Source</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="in">
+    <span class="dot">●</span>
+    <span>Specimen</span>
+    <span class="fill quiet">Layout prototype. Outlet names are real; every headline, quote, person, bill and number is invented.</span>
+    <span class="quiet">Rubric v0.1</span>
+  </div>
+</div>
+
+<div class="shell">
+
+  <header class="masthead">
+    <a class="wordmark" href="index.html">Second<span>.</span>Source</a>
+    <span class="domain">chooseyourbias.com</span>
+    <nav>
+      <a href="index.html">Latest</a>
+      <a href="story.html">Stories</a>
+      <a href="outlet.html">Outlets</a>
+      <a href="method.html">Method</a>
+      <a href="logs.html" aria-current="page">Logs</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <span class="kicker">Logs</span>
+    <h1>Everything that could be used against this project, published first.</h1>
+    <p>Withdrawals, corrections, recusals, and pipeline failures. A quiet failure
+      and a deliberate exclusion look identical from outside unless both are
+      written down.</p>
+  </div>
+
+  <div class="statrow">
+    <div><div class="k">Withdrawals</div><div class="v">3</div></div>
+    <div><div class="k">Corrections</div><div class="v">1</div></div>
+    <div><div class="k">Recused subjects</div><div class="v">4</div></div>
+    <div><div class="k">Articles excluded</div><div class="v">42</div></div>
+    <div><div class="k">Pipeline exceptions</div><div class="v">3</div></div>
+    <div><div class="k">Rubric versions</div><div class="v">1</div></div>
+  </div>
+
+  <div class="sec"><h2>Withdrawals</h2><span class="count">reason code required</span></div>
+  <p class="note" style="margin-bottom:1rem;max-width:44rem">
+    Scores publish without human approval. A published score is pulled only under
+    an enumerated reason code, and every use appears here with a timestamp. There
+    is no code for &ldquo;the result was uncomfortable.&rdquo;
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Code</th><th>Item</th><th style="min-width:20rem">Detail</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">2026-08-15</td><td><code>EXTRACTION_ERROR</code></td><td>Florida Politics, Aug 14</td>
+          <td>Related-links block was not stripped and its headlines counted as body text. Rescored after the fix; corrected score is live.</td>
+        </tr>
+        <tr>
+          <td class="num">2026-08-11</td><td><code>WRONG_CLUSTER</code></td><td>The Capitolist, Aug 11</td>
+          <td>Assigned to the SB 1104 cluster on a shared sponsor name. It was about a different bill. Removed from the cluster; article score unchanged.</td>
+        </tr>
+        <tr>
+          <td class="num">2026-08-06</td><td><code>DUPLICATE</code></td><td>WFSU News, Aug 6</td>
+          <td>Same wire copy ingested twice under two URLs. Second copy removed.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:0.9rem">
+    Codes: <code>EXTRACTION_ERROR</code> <code>WRONG_CLUSTER</code>
+    <code>DUPLICATE</code> <code>LEGAL</code>. Adding a code requires a commit to
+    the public repo.
+  </p>
+
+  <div class="sec"><h2>Corrections</h2></div>
+  <p class="note" style="margin-bottom:1rem;max-width:44rem">
+    Errors in written pieces. Corrections are appended to the piece and listed
+    here; nothing is silently edited.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Piece</th><th style="min-width:22rem">Correction</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">2026-08-14</td>
+          <td>Four outlets covered the same committee vote&hellip;</td>
+          <td>Originally said three outlets quoted only the sponsor. It was two &mdash; the third quoted a cooperative representative in the final paragraph. The count and the headline were corrected.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec"><h2>Recusal</h2><span class="count">published before it was needed</span></div>
+  <p class="note" style="margin-bottom:1rem;max-width:44rem">
+    The owner runs Holmes Drafting Services, a permitting and drafting firm.
+    Coverage in these areas is excluded from analysis and from written pieces.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Subject</th><th class="num">Since</th><th class="num">Articles excluded</th></tr></thead>
+      <tbody>
+        <tr><td>Florida Building Code</td><td class="num">2026-08-17</td><td class="num">12</td></tr>
+        <tr><td>Florida Building Commission</td><td class="num">2026-08-17</td><td class="num">4</td></tr>
+        <tr><td>Department of Business and Professional Regulation</td><td class="num">2026-08-17</td><td class="num">7</td></tr>
+        <tr><td>State preemption of local land-use authority</td><td class="num">2026-08-17</td><td class="num">19</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec"><h2>Pipeline exceptions</h2></div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Scope</th><th style="min-width:22rem">What happened</th></tr></thead>
+      <tbody>
+        <tr><td class="num">2026-08-16</td><td>Capitol News Service</td><td>Homepage scrape returned 0 items. Layout change; selector updated the same day. One day of coverage missing.</td></tr>
+        <tr><td class="num">2026-08-12</td><td>News Service of Florida</td><td>Rate limited (429) for four hours. Backfilled from republishers.</td></tr>
+        <tr><td class="num">2026-08-09</td><td>Tampa Bay Times</td><td>3 articles collected, headline and dek only. Counted as coverage present, excluded from scoring.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec"><h2>Rubric versions</h2></div>
+  <p class="note" style="margin-bottom:1rem;max-width:44rem">
+    Every score is stamped with the version that produced it. Old scores are not
+    rewritten when the rubric changes.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th class="num">Version</th><th class="num">Date</th><th>Change</th><th class="num">Scores under it</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0.1</td><td class="num">2026-08-17</td><td>Initial draft. Uncalibrated.</td><td class="num">1,248</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="foot"><a href="index.html">&larr; Latest</a></footer>
+
+</div>
+</body>
+</html>

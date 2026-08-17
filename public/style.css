@@ -1,0 +1,489 @@
+/* Second Source — prototype stylesheet, v2
+   Reference points: Ground News (measurement bar + stat line under every
+   headline), The Hill (dense wide grid, small heavy headlines, ink not black),
+   TheBlaze (warm paper canvas, grotesk sans, tight negative tracking).
+
+   Rules taken from all three: sans-serif everywhere, zero border-radius, flat —
+   no shadows or boxes, hairline rules do the separating.
+
+   One deliberate departure: blue/red is reserved for the political axis, which
+   here appears only on the calibration page where lean is the thing being
+   tested. Article-level sides are "for the bill / against the bill" and get
+   slate and ochre. Ground News does the same thing with its tan accent. */
+
+/* Inter v4.1, self-hosted. SIL Open Font License — fonts/OFL.txt.
+   Self-hosted rather than CDN: no third-party request from a site whose whole
+   argument is that it doesn't hand readers off to anyone. */
+@font-face {
+  font-family: "InterVariable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/InterVariable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "InterVariable";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/InterVariable-Italic.woff2") format("woff2");
+}
+
+:root {
+  --paper: #f4f1ea;
+  --paper-2: #eae5d9;
+  --ink: #1b1b19;
+  --muted: #6d6a62;
+  --faint: #6f6c63;
+  --rule: #dcd6c8;
+  --rule-hard: #bfb8a6;
+  --panel: #ece7db;
+  --invert: #22221f;
+  --invert-fg: #efece3;
+
+  --accent: #a3521f;
+  --mark: #f0dfbe;
+
+  --side-a: #3c5c6b;
+  --side-b: #a3521f;
+
+  --left: #204986;
+  --right: #802727;
+  --center: #b3ac9c;
+
+  --flag: #8c2f27;
+
+  --sans: "InterVariable", "Inter", "Segoe UI Variable Text", "Segoe UI",
+          -apple-system, system-ui, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1c1c1a;
+    --paper-2: #232320;
+    --ink: #edeae2;
+    --muted: #9d998f;
+    --faint: #948f85;
+    --rule: #35342f;
+    --rule-hard: #4c4a43;
+    --panel: #232320;
+    --invert: #edeae2;
+    --invert-fg: #1c1c1a;
+
+    --accent: #e0a465;
+    --mark: #3d3225;
+
+    --side-a: #86aec1;
+    --side-b: #e0a465;
+
+    --left: #6f96cf;
+    --right: #c96f66;
+    --center: #55534b;
+
+    --flag: #d1665c;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
+  /* cv05: lowercase l with a tail — disambiguates l/1/I in bill numbers and counts */
+  font-feature-settings: "cv05" 1, "ss03" 1;
+}
+
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+/* ---------- top strip ---------- */
+
+.topbar {
+  background: var(--invert);
+  color: var(--invert-fg);
+  font: 600 0.68rem/1 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 0;
+}
+.topbar .in {
+  max-width: 76rem; margin: 0 auto; padding: 0 1.5rem;
+  display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; align-items: center;
+}
+.topbar .dot { color: var(--flag); }
+.topbar .fill { flex: 1 1 auto; }
+.topbar .quiet { font-weight: 400; letter-spacing: 0.03em; text-transform: none; opacity: 0.72; }
+
+/* ---------- shell ---------- */
+
+.shell { max-width: 76rem; margin: 0 auto; padding: 0 1.5rem 5rem; }
+.shell--narrow { max-width: 48rem; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 1.6rem 0 1.1rem;
+  border-bottom: 2px solid var(--ink);
+}
+.wordmark {
+  font: 700 1.5rem/1 var(--sans);
+  letter-spacing: -0.035em;
+}
+.wordmark span { color: var(--accent); }
+.domain {
+  font: 500 0.66rem/1 var(--sans);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+  padding-left: 0.9rem; border-left: 1px solid var(--rule-hard);
+}
+.masthead nav {
+  margin-left: auto; display: flex; gap: 1.4rem;
+  font: 600 0.78rem/1 var(--sans); letter-spacing: -0.005em;
+}
+.masthead nav a { color: var(--muted); padding-bottom: 0.15rem; }
+.masthead nav a:hover { color: var(--ink); text-decoration: none; }
+.masthead nav a[aria-current] { color: var(--ink); box-shadow: 0 2px 0 var(--accent); }
+
+/* ---------- status banner ---------- */
+
+.status {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.8rem 0;
+  font: 0.82rem/1.5 var(--sans);
+  color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0.3rem 0.7rem; align-items: baseline;
+}
+.status b {
+  font: 700 0.66rem/1.4 var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--accent); color: var(--paper); padding: 0.22rem 0.4rem;
+}
+@media (prefers-color-scheme: dark) { .status b { color: #1c1c1a; } }
+.status a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule-hard); }
+
+/* ---------- section headers ---------- */
+
+.sec {
+  display: flex; align-items: baseline; gap: 0.75rem;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 0.4rem; margin: 2.6rem 0 1.1rem;
+}
+.sec h2 {
+  font: 700 0.72rem/1 var(--sans); letter-spacing: 0.11em; text-transform: uppercase;
+  margin: 0;
+}
+.sec .more { margin-left: auto; font: 500 0.72rem/1 var(--sans); color: var(--muted); }
+.sec .count { font: 500 0.72rem/1 var(--mono); color: var(--faint); }
+
+/* ---------- grid ---------- */
+
+.cols { display: grid; grid-template-columns: 1fr 19rem; gap: 0 3rem; align-items: start; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+.rail { border-left: 1px solid var(--rule); padding-left: 2rem; }
+
+/* ---------- headlines ---------- */
+
+.hero { padding: 1.6rem 0 1.4rem; border-bottom: 1px solid var(--rule); }
+.hero h1 {
+  font: 700 2.5rem/1.06 var(--sans); letter-spacing: -0.035em; margin: 0 0 0.7rem;
+}
+.hero p { font-size: 1.05rem; color: var(--muted); margin: 0 0 0.9rem; max-width: 44rem; }
+
+.kicker {
+  font: 700 0.66rem/1 var(--sans); letter-spacing: 0.11em; text-transform: uppercase;
+  color: var(--accent); display: block; margin-bottom: 0.6rem;
+}
+
+h1.page { font: 700 2.1rem/1.08 var(--sans); letter-spacing: -0.035em; margin: 1.8rem 0 0.7rem; }
+h1.page.sm { font-size: 1.7rem; }
+
+.card { padding: 1.15rem 0; border-bottom: 1px solid var(--rule); }
+.card h3 { font: 600 1.06rem/1.25 var(--sans); letter-spacing: -0.017em; margin: 0 0 0.5rem; }
+.card--lead h3 { font-size: 1.3rem; letter-spacing: -0.022em; }
+
+.meta {
+  font: 500 0.72rem/1.5 var(--sans); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0.1rem 0.45rem; align-items: baseline;
+}
+.meta .outlet { font-weight: 600; color: var(--ink); }
+.meta .sep { color: var(--rule-hard); }
+.stamp { font: 0.68rem/1.5 var(--mono); color: var(--faint); letter-spacing: -0.01em; }
+
+.tag {
+  font: 600 0.62rem/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase;
+  border: 1px solid var(--rule-hard); color: var(--muted);
+  padding: 0.22rem 0.34rem; white-space: nowrap;
+}
+.tag--anchor { border-color: var(--accent); color: var(--accent); }
+.tag--out { border-style: dashed; }
+
+/* ---------- the measurement bar (signature component) ---------- */
+
+.mbar {
+  display: flex; height: 8px; margin: 0.75rem 0 0.4rem;
+  background: var(--rule); overflow: hidden;
+}
+.mbar i { display: block; height: 100%; }
+.mbar .a { background: var(--side-a); }
+.mbar .b { background: var(--side-b); }
+.mbar .n { background: var(--center); }
+.mbar .l { background: var(--left); }
+.mbar .r { background: var(--right); }
+.mbar--tall { height: 12px; }
+.mbar--tiny { height: 5px; margin: 0.5rem 0 0.3rem; }
+
+.mstat {
+  font: 500 0.72rem/1.5 var(--sans); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0.1rem 0.9rem;
+}
+.mstat b { font-weight: 700; color: var(--ink); }
+.mstat .sw::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 0.35rem;
+}
+.mstat .sw.a::before { background: var(--side-a); }
+.mstat .sw.b::before { background: var(--side-b); }
+.mstat .sw.n::before { background: var(--center); }
+.mstat .sw.l::before { background: var(--left); }
+.mstat .sw.r::before { background: var(--right); }
+
+/* numeric readout row under a headline */
+.readout {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.35rem; margin-top: 0.6rem;
+  font: 500 0.7rem/1.4 var(--sans); color: var(--muted);
+}
+.readout b {
+  display: block; font: 700 0.95rem/1.2 var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--ink); letter-spacing: -0.03em;
+}
+.readout .flagged b { color: var(--flag); }
+
+/* big stat strip */
+.statrow {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+  margin: 1.5rem 0 2rem;
+}
+.statrow > div { background: var(--paper); padding: 0.85rem 0.9rem; }
+.statrow .k {
+  font: 600 0.64rem/1.3 var(--sans); letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 0.3rem;
+}
+.statrow .v {
+  font: 700 1.35rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.04em;
+}
+.statrow .v small { font: 500 0.72rem/1 var(--sans); color: var(--faint); letter-spacing: 0; }
+
+/* ---------- outlet comparison (the Ground News move) ---------- */
+
+.compare { border-top: 1px solid var(--ink); }
+.crow {
+  display: grid; grid-template-columns: 11rem 1fr 9rem;
+  gap: 0 1.5rem; padding: 1.05rem 0; border-bottom: 1px solid var(--rule);
+  align-items: start;
+}
+.crow .who { display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-start; }
+.crow .who b { font: 700 0.82rem/1.25 var(--sans); letter-spacing: -0.012em; }
+.crow .hed { font: 500 1.02rem/1.3 var(--sans); letter-spacing: -0.014em; }
+.crow .hed .sub { display: block; margin-top: 0.4rem; }
+.crow .fig { text-align: right; }
+.crow .fig b {
+  font: 700 1.1rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.04em;
+  display: block;
+}
+.crow .fig span { font: 500 0.66rem/1.4 var(--sans); color: var(--muted); }
+.crow--muted .hed { color: var(--muted); }
+
+/* ---------- signals ---------- */
+
+.signal { padding: 1.05rem 0; border-bottom: 1px solid var(--rule); }
+.signal-head { display: flex; align-items: baseline; gap: 0.75rem; }
+.signal-name { font: 500 0.78rem/1.4 var(--mono); letter-spacing: -0.02em; }
+.signal-val {
+  margin-left: auto; font: 700 1.05rem/1 var(--mono);
+  font-variant-numeric: tabular-nums; letter-spacing: -0.04em; white-space: nowrap;
+}
+.signal-desc { font-size: 0.85rem; color: var(--muted); margin: 0.35rem 0 0; }
+.judged {
+  font: 700 0.58rem/1 var(--sans); letter-spacing: 0.09em;
+  border: 1px solid var(--rule-hard); color: var(--muted);
+  padding: 0.2rem 0.28rem; vertical-align: 1px;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.chips li {
+  font: 500 0.72rem/1 var(--sans); padding: 0.34rem 0.5rem;
+  border: 1px solid var(--rule-hard);
+}
+.chips li.absent { color: var(--faint); border-style: dashed; text-decoration: line-through; }
+
+details.receipts { margin-top: 0.75rem; }
+details.receipts > summary {
+  font: 700 0.66rem/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--accent); cursor: pointer; list-style: none; padding: 0.35rem 0; display: inline-block;
+}
+details.receipts > summary::-webkit-details-marker { display: none; }
+details.receipts > summary::before { content: "+ "; }
+details.receipts[open] > summary::before { content: "\2212 "; }
+details.receipts > summary:hover { text-decoration: underline; }
+
+.evidence { margin: 0.45rem 0 0; padding: 0; list-style: none; }
+.evidence li {
+  border-left: 2px solid var(--rule-hard); padding: 0.15rem 0 0.15rem 0.75rem;
+  margin-bottom: 0.5rem; font-size: 0.9rem;
+}
+.evidence .para {
+  font: 0.68rem/1.5 var(--mono); color: var(--faint);
+  display: inline-block; min-width: 2.6rem;
+}
+.evidence mark { background: var(--mark); color: inherit; padding: 0 2px; }
+.evidence .why { font-size: 0.78rem; color: var(--muted); }
+
+/* ---------- tables ---------- */
+
+table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+th, td { text-align: left; padding: 0.55rem 0.7rem 0.55rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font: 700 0.64rem/1.4 var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); border-bottom: 1px solid var(--ink);
+}
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; padding-right: 0; }
+th.num { font-family: var(--sans); }
+.scroll { overflow-x: auto; }
+.yes { color: var(--ink); }
+.no { color: var(--faint); }
+tbody tr:hover { background: var(--panel); }
+
+/* ---------- blocks ---------- */
+
+.caveat {
+  border-left: 3px solid var(--accent); background: var(--panel);
+  padding: 0.9rem 1.1rem; font-size: 0.85rem; color: var(--muted); margin: 0 0 1.5rem;
+}
+.caveat strong { color: var(--ink); }
+
+.prose { max-width: 40rem; }
+.prose p { margin: 0 0 1rem; font-size: 0.98rem; line-height: 1.65; }
+.prose ul { margin: 0 0 1rem; padding-left: 1.15rem; }
+.prose li { margin-bottom: 0.5rem; font-size: 0.98rem; line-height: 1.6; }
+.note { font-size: 0.8rem; line-height: 1.6; color: var(--muted); }
+
+code { font: 0.82rem/1.5 var(--mono); background: var(--panel); padding: 0.1rem 0.3rem; }
+pre {
+  font: 0.8rem/1.65 var(--mono); background: var(--invert); color: var(--invert-fg);
+  padding: 0.85rem 1rem; overflow-x: auto; margin: 0 0 1rem;
+}
+
+.repro { border-top: 2px solid var(--ink); margin-top: 2.75rem; padding-top: 1.25rem; }
+
+.foot {
+  border-top: 1px solid var(--rule); margin-top: 3.5rem; padding-top: 1.25rem;
+  font-size: 0.8rem; color: var(--muted);
+}
+.foot a { text-decoration: underline; text-decoration-color: var(--rule-hard); }
+
+/* ---------- byline piece ----------
+   Long-form media criticism. One narrow measure for reading, with evidence
+   blocks allowed to break out to full width. The evidence is the point of the
+   piece, so it gets more room than the prose, not less. */
+
+.piece {
+  display: grid;
+  grid-template-columns:
+    [full-start] minmax(0, 1fr)
+    [text-start] minmax(0, 38rem) [text-end]
+    minmax(0, 1fr) [full-end];
+}
+.piece > * { grid-column: text; }
+.piece > .breakout { grid-column: full; }
+
+.piece .dek {
+  font: 400 1.2rem/1.45 var(--sans);
+  letter-spacing: -0.012em;
+  color: var(--muted);
+  margin: 0 0 1.4rem;
+}
+.byline {
+  display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; align-items: baseline;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  padding: 0.7rem 0; margin: 0 0 2rem;
+  font: 500 0.76rem/1.5 var(--sans); color: var(--muted);
+}
+.byline b { font-weight: 700; color: var(--ink); }
+.byline .sep { color: var(--rule-hard); }
+
+.piece p { font-size: 1.06rem; line-height: 1.7; margin: 0 0 1.3rem; }
+.piece h2 {
+  font: 700 1.35rem/1.2 var(--sans); letter-spacing: -0.025em;
+  margin: 2.4rem 0 0.9rem;
+}
+.piece blockquote {
+  margin: 0 0 1.3rem; padding: 0 0 0 1.1rem;
+  border-left: 3px solid var(--accent);
+  font-size: 1.06rem; line-height: 1.6;
+}
+.piece blockquote cite {
+  display: block; margin-top: 0.5rem; font: 500 0.78rem/1.5 var(--sans);
+  color: var(--muted); font-style: normal;
+}
+
+/* full-width evidence block inside a piece */
+.figure { margin: 2.2rem 0; }
+.figure > .cap {
+  display: flex; align-items: baseline; gap: 0.75rem;
+  border-bottom: 1px solid var(--ink); padding-bottom: 0.4rem; margin-bottom: 0.2rem;
+}
+.figure > .cap h3 {
+  font: 700 0.72rem/1 var(--sans); letter-spacing: 0.11em; text-transform: uppercase; margin: 0;
+}
+.figure > .cap .src { margin-left: auto; font: 500 0.7rem/1 var(--mono); color: var(--faint); }
+.figure > .note { margin-top: 0.7rem; }
+
+/* the number that carries the piece */
+.pull {
+  margin: 2.2rem 0; padding: 1.2rem 0;
+  border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+  display: flex; align-items: baseline; gap: 1.2rem; flex-wrap: wrap;
+}
+.pull .n {
+  font: 700 3.2rem/0.9 var(--mono); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em; color: var(--accent);
+}
+.pull .t { flex: 1 1 14rem; font: 500 1rem/1.4 var(--sans); letter-spacing: -0.01em; }
+
+.correction {
+  border: 1px solid var(--flag); border-left-width: 3px;
+  padding: 0.9rem 1.1rem; margin: 2.5rem 0 0; font-size: 0.85rem; color: var(--muted);
+}
+.correction b {
+  display: block; font: 700 0.66rem/1.4 var(--sans); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--flag); margin-bottom: 0.35rem;
+}
+
+.disclosure {
+  border-top: 1px solid var(--rule); margin-top: 2.5rem; padding-top: 1rem;
+  font-size: 0.82rem; color: var(--muted);
+}
+.disclosure b { color: var(--ink); }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 62rem) {
+  .cols { grid-template-columns: 1fr; gap: 0; }
+  .rail { border-left: 0; padding-left: 0; border-top: 2px solid var(--ink); margin-top: 2.5rem; padding-top: 0.5rem; }
+}
+@media (max-width: 48rem) {
+  .cards { grid-template-columns: 1fr; gap: 0; }
+  .crow { grid-template-columns: 1fr; gap: 0.5rem 0; }
+  .crow .fig { text-align: left; display: flex; align-items: baseline; gap: 0.5rem; }
+  .hero h1 { font-size: 1.9rem; }
+  h1.page { font-size: 1.65rem; }
+  .masthead nav { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 1rem; }
+  .pull .n { font-size: 2.4rem; }
+  .piece .dek { font-size: 1.05rem; }
+}

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Method — Second Source</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="in">
+    <span class="dot">●</span>
+    <span>Specimen</span>
+    <span class="fill quiet">Layout prototype. Outlet names are real; every headline, quote, person, bill and number is invented.</span>
+    <span class="quiet">Rubric v0.1</span>
+  </div>
+</div>
+
+<div class="shell">
+
+  <header class="masthead">
+    <a class="wordmark" href="index.html">Second<span>.</span>Source</a>
+    <span class="domain">chooseyourbias.com</span>
+    <nav>
+      <a href="index.html">Latest</a>
+      <a href="story.html">Stories</a>
+      <a href="outlet.html">Outlets</a>
+      <a href="method.html" aria-current="page">Method</a>
+      <a href="logs.html">Logs</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <span class="kicker">Method</span>
+    <h1>The scorer never sees who wrote the article.</h1>
+    <p>Outlet name, masthead references, byline, author bio, source URL and
+      boilerplate are stripped before a single word reaches the model. A score
+      describes the text in front of it, not the reputation attached to it.</p>
+  </div>
+
+  <div class="cols">
+  <main>
+
+    <div class="sec" style="margin-top:2rem"><h2>Counted, not felt</h2></div>
+    <div class="prose">
+      <p>Signals are observable features of the text: how many named sources, how
+        many quoted words to each side, where the opposing view first appears, how
+        many claims trace to a document. A number built from countable things can
+        be argued with. A vibe cannot be defended, only asserted.</p>
+      <p>Two signals &mdash; headline-to-body congruence and steelman quality &mdash;
+        need model judgement. They are marked <span class="judged">J</span>
+        wherever they appear, with confidence and run-to-run spread beside them.</p>
+      <p>Blinding is the whole methodological claim, and it is the first thing that
+        should be attacked. The stripping code is in the public repo and the
+        stripped text is recoverable for any published score.</p>
+    </div>
+
+    <div class="sec"><h2>Calibration</h2><span class="count">status: not run</span></div>
+    <div class="status" style="border-top:0">
+      <b>Not run</b>
+      <span>Rubric v0.1 is a draft. Thresholds below are fixed in advance so they can&rsquo;t be moved to fit the outcome.</span>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th style="min-width:16rem">Test</th><th>Passes if</th><th class="num">Result</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Wire anchor</strong><br><span class="note">NSF copy is republished statewide and functions as the zero point.</span></td>
+            <td>NSF median lands inside the neutral band on every signal</td><td class="num">&mdash;</td>
+          </tr>
+          <tr>
+            <td><strong>Known-lean separation</strong><br><span class="note">Outlets with stated priors should separate in the predicted directions.</span></td>
+            <td>Separation is in the predicted direction <em>and</em> symmetric in magnitude</td><td class="num">&mdash;</td>
+          </tr>
+          <tr>
+            <td><strong>Valence swap</strong><br><span class="note">Party names and actor identities flipped so structure is identical and direction reverses.</span></td>
+            <td>Scores match within the test&ndash;retest spread</td><td class="num">&mdash;</td>
+          </tr>
+          <tr>
+            <td><strong>Test&ndash;retest</strong><br><span class="note">Every article scored five times.</span></td>
+            <td>Published regardless of result, per signal</td><td class="num">&mdash;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec"><h2>Separation test</h2><span class="count">the one axis where left/right is the measurement</span></div>
+    <p class="note" style="margin-bottom:1.25rem;max-width:44rem">
+      This is the only place on the site coloured by political direction, because
+      it is the only place where political direction is the thing being tested.
+      Article pages colour sides by position on the bill, not by party.
+      <strong>Bars below are the predicted shape, not a result.</strong>
+    </p>
+
+    <div class="compare">
+      <div class="crow">
+        <div class="who"><b>Florida Phoenix</b><span class="stamp">prior: left</span></div>
+        <div class="hed"><span class="mbar" style="max-width:24rem"><i class="n" style="width:32%"></i><i class="l" style="width:18%"></i><i class="n" style="width:50%"></i></span>
+          <span class="mstat"><span class="sw l">predicted to separate left</span></span></div>
+        <div class="fig"><b>&mdash;</b><span>not run</span></div>
+      </div>
+      <div class="crow">
+        <div class="who"><b>News Service of Florida</b><span class="tag tag--anchor">Anchor</span></div>
+        <div class="hed"><span class="mbar" style="max-width:24rem"><i class="n" style="width:46%"></i><i class="n" style="width:8%;background:var(--accent)"></i><i class="n" style="width:46%"></i></span>
+          <span class="mstat"><span>predicted to sit at zero</span></span></div>
+        <div class="fig"><b>&mdash;</b><span>not run</span></div>
+      </div>
+      <div class="crow">
+        <div class="who"><b>Florida&rsquo;s Voice</b><span class="stamp">prior: right</span></div>
+        <div class="hed"><span class="mbar" style="max-width:24rem"><i class="n" style="width:50%"></i><i class="r" style="width:18%"></i><i class="n" style="width:32%"></i></span>
+          <span class="mstat"><span class="sw r">predicted to separate right</span></span></div>
+        <div class="fig"><b>&mdash;</b><span>not run</span></div>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:1.5rem">
+      <p><strong>Asymmetric separation is the important one.</strong> If outlets on
+        one side separate further than outlets on the other, the likely explanation
+        is lean inherited from the model, not lean in the coverage. Finding that
+        here is the point of running the test before launch rather than after
+        someone else runs it.</p>
+    </div>
+
+    <div class="sec"><h2>Priors, stated in advance</h2></div>
+    <p class="note" style="margin-bottom:1rem;max-width:44rem">
+      These exist in one file, are used as the hypothesis the separation test tries
+      to falsify, and are never passed to the scorer or printed beside an
+      outlet&rsquo;s name anywhere else on this site. A prediction written after the
+      result is not a prediction.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Outlet</th><th>Prior</th><th>Role in calibration</th></tr></thead>
+        <tbody>
+          <tr><td>News Service of Florida</td><td>wire</td><td>anchor &mdash; expected near neutral</td></tr>
+          <tr><td>Florida Politics</td><td>center</td><td>expected near neutral</td></tr>
+          <tr><td>Capitol News Service</td><td>center</td><td>&mdash;</td></tr>
+          <tr><td>WFSU News</td><td>center-left</td><td>&mdash;</td></tr>
+          <tr><td>Florida Phoenix</td><td>left</td><td>separation test</td></tr>
+          <tr><td>The Capitolist</td><td>right</td><td>separation test</td></tr>
+          <tr><td>Florida&rsquo;s Voice</td><td>right</td><td>separation test</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec"><h2>What this does not do</h2></div>
+    <div class="prose">
+      <ul>
+        <li>It does not evaluate whether reporting is accurate. Nothing here fact-checks a claim.</li>
+        <li>It does not score opinion sections, columns, or editorials.</li>
+        <li>It does not republish articles. Scores link out; raw text is stored locally for analysis and never served.</li>
+        <li>It does not generate prose about people. Published output is counts the code computed and verbatim quotes with links.</li>
+        <li>It does not cover three of Florida&rsquo;s largest papers, which are hard-paywalled and blocked to automated fetching. That is a gap in the data, not a finding about them.</li>
+        <li>Omission analysis needs three or more outlets on a story. Single-outlet stories get sourcing and language signals only.</li>
+      </ul>
+    </div>
+
+    <div class="repro">
+      <div class="sec" style="margin-top:0"><h2>Reproduce anything</h2></div>
+      <pre>git clone https://github.com/nrhhds/SecondSource
+python score.py --url &lt;source-url&gt; --rubric 0.1 --seed 7</pre>
+    </div>
+
+  </main>
+
+  <aside class="rail">
+    <div class="sec" style="margin-top:1.6rem"><h2>No composite score</h2></div>
+    <p class="note">There is no single number, and there will not be one until the
+      calibration tests pass. A composite is the only thing anyone repeats, which
+      makes it the number that has to be earned last rather than first.</p>
+
+    <div class="sec"><h2>Nobody approves a score</h2></div>
+    <p class="note">The pipeline publishes without review. There is no queue where a
+      human sees a score and decides whether it runs. A published score is
+      withdrawn only under an enumerated reason code, and every withdrawal is
+      logged publicly.</p>
+    <p class="note">
+      <code>EXTRACTION_ERROR</code><br><code>WRONG_CLUSTER</code><br>
+      <code>DUPLICATE</code><br><code>LEGAL</code>
+    </p>
+    <p class="note"><a href="logs.html" style="text-decoration:underline">The log &rarr;</a></p>
+
+    <div class="sec"><h2>Conflicts</h2></div>
+    <p class="note">The owner of this project runs Holmes Drafting Services, a
+      permitting and drafting firm. Coverage of the Florida Building Code, the
+      Florida Building Commission, DBPR, and state preemption of local land-use
+      authority is recused &mdash; excluded from analysis and from written pieces.</p>
+    <p class="note"><a href="logs.html" style="text-decoration:underline">Recusal list &rarr;</a></p>
+  </aside>
+  </div>
+
+  <footer class="foot"><a href="index.html">&larr; Latest</a></footer>
+
+</div>
+</body>
+</html>
