@@ -34,11 +34,11 @@
       "id": "flpolitics",
       "name": "Florida Politics",
       "feed": "https://floridapolitics.com/feed/",
-      "status": "needs_ua",
+      "status": "blocked",
       "fulltext": true,
       "paywall": "none",
       "prior_lean": "center",
-      "notes": "Returns 402 to bot UA. Set a real UA and rate limit."
+      "notes": "Cloudflare blocks all automated access as of 2026-08-17: 403 on /feed/ AND on /robots.txt, with a real browser UA. Not a UA problem. Access requested from the outlet; set status back to needs_ua if granted."
     },
     {
       "id": "nsf",

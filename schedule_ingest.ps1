@@ -21,11 +21,21 @@ $log    = Join-Path $base 'data\ingest.log'
 
 if (-not (Test-Path $py))     { throw "venv python not found at $py - create it with: py -3 -m venv .venv" }
 if (-not (Test-Path $script)) { throw "ingest.py not found at $script" }
+if (-not (Test-Path (Join-Path $base 'health.py'))) { throw "health.py not found in $base" }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
 
 # Out-File -Encoding utf8 rather than *>> : PowerShell 5.1 redirection writes
 # UTF-16, which makes the log unreadable to grep and to anything parsing it later.
-$inner = "Add-Content -Path '$log' -Encoding utf8 -Value ('--- run ' + (Get-Date -Format s)); & '$py' '$script' 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8"
+#
+# health.py runs after each ingest so a silently broken source shows up in the
+# log without anyone having to go looking. --quiet prints only problems, so a
+# healthy run adds one line. Its exit code becomes the task's LastTaskResult:
+# non-zero means at least one source is in ALARM.
+$health = Join-Path $base 'health.py'
+$inner  = "Add-Content -Path '$log' -Encoding utf8 -Value ('--- run ' + (Get-Date -Format s)); " +
+          "& '$py' '$script' 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8; " +
+          "& '$py' '$health' --quiet 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8; " +
+          "exit `$LASTEXITCODE"
 $arg   = "-NoProfile -NonInteractive -WindowStyle Hidden -Command `"$inner`""
 
 $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg -WorkingDirectory $base
