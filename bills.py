@@ -21,6 +21,7 @@ Usage:
     python bills.py list                 # sessions + dataset dates for FL
     python bills.py pull --year 2026     # download + extract one session
     python bills.py fields --year 2026   # verify the fields above exist
+    python bills.py watch --quiet        # flag sessions LegiScan just added
 """
 
 import argparse
@@ -39,6 +40,7 @@ import requests
 ROOT = Path(__file__).parent
 DATA = ROOT / "data" / "legiscan"
 ENV_PATH = ROOT / ".env"
+KNOWN_SESSIONS_PATH = DATA / "known_sessions.json"
 
 API = "https://api.legiscan.com/"
 STATE = "FL"
@@ -94,6 +96,63 @@ def cmd_list(_args) -> int:
             f"{d.get('session_id'):>11}  {years:<11} {str(d.get('dataset_date')):<13} "
             f"{size:>9,}  {d.get('session_name')}"
         )
+    return 0
+
+
+def save_known(state: dict) -> None:
+    DATA.mkdir(parents=True, exist_ok=True)
+    KNOWN_SESSIONS_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def cmd_watch(args) -> int:
+    """Report FL sessions LegiScan has added since the last run.
+
+    The 2027 session cannot be pulled until Florida opens prefiling for it, and
+    checking by hand is the chore that quietly gets dropped for three months.
+    Runs alongside the twice-daily ingest so the session's arrival lands in
+    ingest.log rather than waiting to be remembered.
+
+    A new session stays loud every run until its dataset is on disk. Announcing
+    once would put the whole point of this on a single log line nobody read.
+    """
+    live = {
+        str(d["session_id"]): d.get("session_name") or ""
+        for d in datasets()
+        if d.get("session_id")
+    }
+    if not live:
+        print("watch: LegiScan returned no sessions", file=sys.stderr)
+        return 1
+
+    if not KNOWN_SESSIONS_PATH.exists():
+        # Everything LegiScan already lists is by definition not news.
+        save_known({"sessions": live, "pending": []})
+        if not args.quiet:
+            print(f"watch: baseline seeded with {len(live)} FL sessions")
+        return 0
+
+    state = json.loads(KNOWN_SESSIONS_PATH.read_text(encoding="utf-8"))
+    known = state.get("sessions") or {}
+    pending = [s for s in (state.get("pending") or []) if s in live]
+
+    fresh = [s for s in sorted(live, key=int) if s not in known and s not in pending]
+    unpulled = [s for s in pending if not (DATA / f"FL_{s}").exists()]
+
+    for sid in fresh:
+        print(f"watch: NEW SESSION {sid}  {live[sid]}")
+        print(f"       pull it with:  python bills.py pull --session-id {sid}")
+    for sid in unpulled:
+        print(f"watch: {sid} {live[sid]} still not pulled - "
+              f"python bills.py pull --session-id {sid}")
+
+    known.update(live)
+    save_known({
+        "sessions": known,
+        "pending": sorted(set(fresh) | set(unpulled), key=int),
+    })
+
+    if not fresh and not unpulled and not args.quiet:
+        print(f"watch: no new FL sessions ({len(known)} known)")
     return 0
 
 
@@ -232,6 +291,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="list FL sessions and dataset snapshots").set_defaults(fn=cmd_list)
+    w = sub.add_parser("watch", help="report FL sessions added since the last run")
+    w.add_argument("--quiet", action="store_true", help="print only new or unpulled sessions")
+    w.set_defaults(fn=cmd_watch)
     for name, fn, help_text in (
         ("pull", cmd_pull, "download and extract a session dataset"),
         ("fields", cmd_fields, "verify required fields exist in an extracted dataset"),
@@ -244,8 +306,8 @@ def main() -> int:
     args = ap.parse_args()
     try:
         return args.fn(args)
-    except requests.HTTPError as e:
-        print(f"HTTP error: {e}", file=sys.stderr)
+    except requests.RequestException as e:
+        print(f"request failed: {e}", file=sys.stderr)
         return 1
     except RuntimeError as e:
         print(f"API error: {e}", file=sys.stderr)

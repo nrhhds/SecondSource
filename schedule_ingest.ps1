@@ -6,7 +6,11 @@
   loses their coverage permanently.
 
   Runs only while you are logged on, so no stored password is required.
-  StartWhenAvailable catches up a run missed while the machine was off.
+  WakeToRun wakes the machine for a trigger; StartWhenAvailable catches up a run
+  missed while it was off. WakeToRun is inert unless wake timers are enabled in
+  the active power scheme -- this machine ships with them disabled:
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP RTCWAKE 1
+  It wakes from sleep only, never from hibernate or shutdown.
 
   Usage:  powershell -ExecutionPolicy Bypass -File .\schedule_ingest.ps1
   Remove: Unregister-ScheduledTask -TaskName 'SecondSource Ingest' -Confirm:$false
@@ -22,6 +26,7 @@ $log    = Join-Path $base 'data\ingest.log'
 if (-not (Test-Path $py))     { throw "venv python not found at $py - create it with: py -3 -m venv .venv" }
 if (-not (Test-Path $script)) { throw "ingest.py not found at $script" }
 if (-not (Test-Path (Join-Path $base 'health.py'))) { throw "health.py not found in $base" }
+if (-not (Test-Path (Join-Path $base 'bills.py')))  { throw "bills.py not found in $base" }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
 
 # Out-File -Encoding utf8 rather than *>> : PowerShell 5.1 redirection writes
@@ -31,9 +36,17 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
 # log without anyone having to go looking. --quiet prints only problems, so a
 # healthy run adds one line. Its exit code becomes the task's LastTaskResult:
 # non-zero means at least one source is in ALARM.
+#
+# bills.py watch --quiet is silent unless LegiScan adds an FL session, so the
+# 2027 session announces itself in this log instead of being polled by hand. It
+# runs before health.py deliberately: health.py's exit code is what becomes
+# LastTaskResult, and a LegiScan outage must not overwrite "a source is in
+# ALARM" with its own status.
 $health = Join-Path $base 'health.py'
+$bills  = Join-Path $base 'bills.py'
 $inner  = "Add-Content -Path '$log' -Encoding utf8 -Value ('--- run ' + (Get-Date -Format s)); " +
           "& '$py' '$script' 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8; " +
+          "& '$py' '$bills' watch --quiet 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8; " +
           "& '$py' '$health' --quiet 2>&1 | Out-File -FilePath '$log' -Append -Encoding utf8; " +
           "exit `$LASTEXITCODE"
 $arg   = "-NoProfile -NonInteractive -WindowStyle Hidden -Command `"$inner`""
@@ -45,6 +58,7 @@ $triggers = @(
 )
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
+    -WakeToRun `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -MultipleInstances IgnoreNew `
