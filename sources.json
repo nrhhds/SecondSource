@@ -34,62 +34,100 @@
       "id": "flpolitics",
       "name": "Florida Politics",
       "feed": "https://floridapolitics.com/feed/",
-      "status": "blocked",
+      "status": "ready",
       "fulltext": true,
       "paywall": "none",
       "prior_lean": "center",
-      "notes": "Cloudflare blocks all automated access as of 2026-08-17: 403 on /feed/ AND on /robots.txt, with a real browser UA. Not a UA problem. Access requested from the outlet; set status back to needs_ua if granted."
+      "notes": "Explicitly crawl-permitted: robots.txt is 'User-agent: * / Disallow:' (empty = allow all) plus a Yoast sitemap_index.xml. The earlier 'blocks bots' finding was our own fault - the site 403s any UA advertising an outdated browser ('Update Browser Required'), and we were sending Chrome/127. An honest named crawler gets 200. Feed carries full text and named bylines. HIGH VELOCITY: ~10 items per 4 hours into a 10-item window, so page 1 alone loses most output between twice-daily runs - hence catchup_pages.",
+      "fulltext_from": "feed",
+      "catchup_pages": 6,
+      "exclude_authors": [
+        "news service of florida"
+      ]
     },
     {
       "id": "nsf",
       "name": "News Service of Florida",
-      "feed": "https://newsserviceflorida.com/search/?q=&t=article&f=rss",
-      "status": "needs_ua",
-      "fulltext": false,
+      "feed": "https://tallahasseereports.com/author/the-news-service-of-florida/feed/",
+      "status": "ready",
+      "fulltext": true,
       "paywall": "subscription",
       "prior_lean": "wire",
       "calibration_anchor": true,
-      "notes": "429 rate-limited. Subscription wire. Pull text from republishers."
+      "notes": "Subscription wire; text pulled from a republisher's author archive, which carries content:encoded in full and paginates (?paged=N) for backfill. Direct feed https://newsserviceflorida.com/search/?q=&t=article&f=rss is headlines-only - keep it for the re-headline check: if a republisher retitles the wire, this source is scoring the republisher's edit, not NSF. Body text opens with 'By The News Service of Florida' - the blinding step MUST strip it or the near-zero calibration is circular. One republisher is a thin anchor; find more (also unlocks the same-story-across-outlets editing signal). Second republisher confirmed: tampabay.com carries the wire as 'By News Service of Florida'. Two republishers make the same-story editing comparison possible - it needs a per-republisher source_id scheme (nsf@<outlet>) that is not built yet.",
+      "fulltext_from": "feed",
+      "crawl_delay": 10,
+      "via": "tallahasseereports"
+    },
+    {
+      "id": "nsf_wire",
+      "name": "News Service of Florida (direct wire, headlines only)",
+      "feed": "https://newsserviceflorida.com/search/?q=&t=article&f=rss",
+      "role": "validation",
+      "status": "archive",
+      "fulltext": false,
+      "paywall": "subscription",
+      "prior_lean": "wire",
+      "notes": "Titles pulled direct from the wire before 'nsf' was repointed at a republisher. Kept, not deleted, because these are NSF's own headlines: diff them against the republished titles to detect retitling. If a republisher retitles, 'nsf' is scoring the republisher's edit and the near-zero anchor is invalid. status archive - not fetched. Never score: headline-only, no body text."
+    },
+    {
+      "id": "tallahasseereports",
+      "name": "Tallahassee Reports",
+      "feed": "https://tallahasseereports.com/feed/",
+      "status": "ready",
+      "fulltext": true,
+      "fulltext_from": "feed",
+      "crawl_delay": 10,
+      "exclude_authors": [
+        "news service of florida"
+      ],
+      "paywall": "none",
+      "prior_lean": null,
+      "notes": "Apache, no edge blocking; robots.txt permissive with Crawl-delay 10. exclude_authors keeps the NSF republications out of this source_id - they belong to 'nsf', and both feeds reach the same URL. Of 10 sampled entries only 1 original was state-Capitol (the rest local: city commission, schools, real estate, HS sports) so a relevance filter is needed before scoring. prior_lean deliberately null - needs an editorial call on its ORIGINAL reporting, not on the wire copy it reprints."
     },
     {
       "id": "cns",
       "name": "Capitol News Service",
       "feed": "https://www.flanews.com/feed/",
-      "status": "stale_feed",
+      "status": "defunct",
       "fulltext": true,
       "paywall": "none",
       "prior_lean": "center",
-      "notes": "Feed newest item Apr 2025. Scrape homepage instead."
+      "notes": "Defunct. Owner retired in 2022; the site lingered and served stale items until Apr 2025. Do not scrape - there is nothing being published. Removed from the target outlet count."
     },
     {
       "id": "wfsu",
       "name": "WFSU News",
       "feed": null,
-      "status": "no_feed",
+      "status": "low_value",
       "fulltext": true,
       "paywall": "none",
       "prior_lean": "center-left",
-      "notes": "NPR Grove platform, no feed found. Use Google News site query."
+      "notes": "Measured Aug 17, not worth the workaround. index.rss returns 0 entries. The tags/tallahassee-politics.rss feed exists but is dormant - 10 entries spanning Oct 2022 to Jan 2026, summary-only at ~179 chars. news-sitemap-content.xml is fresh but 31 of 36 items are /npr-news/ national wire and exactly 1 is local. Deprioritised: there is barely any local Capitol journalism here to measure."
     },
     {
       "id": "tbtimes",
       "name": "Tampa Bay Times",
       "feed": "https://www.tampabay.com/arc/outboundfeeds/rss/?outputType=xml",
-      "status": "headlines_only",
-      "fulltext": false,
+      "status": "ready",
+      "fulltext": true,
       "paywall": "hard",
       "prior_lean": "center-left",
-      "notes": "Arc feed works but headline+dek only."
+      "notes": "NOT headlines-only - that was wrong. The Arc feed carries full article text (sampled 1031/836/545/399 words) with named bylines. Verified 2026-08-18. Requires the Accept header: without it the endpoint returns 0 entries. ALSO AN NSF REPUBLISHER, labelled 'By News Service of Florida' - excluded here so it does not dilute the Times' own score. Harvesting NSF from here needs main-feed filtering (Arc has no author archive), unlike the Tallahassee Reports route.",
+      "fulltext_from": "feed",
+      "exclude_authors": [
+        "news service of florida"
+      ]
     },
     {
       "id": "miamiherald",
       "name": "Miami Herald",
       "feed": null,
-      "status": "deferred_v1",
+      "status": "prohibited",
       "fulltext": false,
       "paywall": "hard",
       "prior_lean": "center-left",
-      "notes": "McClatchy. 403 to fetcher, hard paywall."
+      "notes": "DO NOT CRAWL. robots.txt carries a written prohibition (read 2026-08-18): automated scraping and specifically 'text and data mining activities' require prior written permission. Its User-agent:* stanza only blocks template paths, so article paths are technically allowed - the prohibition is in prose referencing their ToS. Also blocks anthropic-ai / ClaudeBot / GPTBot / CCBot / Scrapy on /*.html, and blocks archive.org_bot + ia_archiver, so there is no Wayback route either. Separately it never answers us: 45s read timeout even on robots.txt. Only route is written permission. Coverage EXISTENCE is still trackable via sayfie (linked x25 on one homepage), which is all the omission analysis needs. Log in the exception log."
     },
     {
       "id": "orlandosentinel",
@@ -99,7 +137,7 @@
       "fulltext": false,
       "paywall": "hard",
       "prior_lean": "center",
-      "notes": "Tribune. 403 to fetcher, hard paywall."
+      "notes": "403s an honest crawler (tested 2026-08-18, both /feed/ and the Arc outbound path). Existence trackable via sayfie."
     },
     {
       "id": "talldemocrat",
@@ -109,7 +147,18 @@
       "fulltext": false,
       "paywall": "hard",
       "prior_lean": "center",
-      "notes": "Gannett. 403 to fetcher, hard paywall."
+      "notes": "No RSS. Gannett's rssfeeds.tallahassee.com returns an HTML app shell, and /feed/ + the Arc path 404 (tested 2026-08-18). Existence trackable via sayfie, which links tallahassee.com x12."
+    },
+    {
+      "id": "sayfie",
+      "name": "Sayfie Review",
+      "feed": null,
+      "role": "index",
+      "status": "planned",
+      "fulltext": false,
+      "paywall": "none",
+      "prior_lean": null,
+      "notes": "Link aggregator, NOT an outlet: 241 off-site vs 18 on-site links on one homepage. robots.txt leaves the blanket disallow commented out; only a Googlebot crawl-delay 3. No usable RSS (declared feed is javascript:void(0)) so ingestion means parsing the homepage. Value is coverage EXISTENCE for outlets we cannot crawl - one homepage carried floridapolitics.com x29, miamiherald x25, sun-sentinel x13, tallahassee.com x12, palmbeachpost x10. Feeds the omission feed and bill-vs-coverage matching, never a bias score. Human-curated: its own selection bias belongs in the priors disclosure. STATUS planned - the index scraper and its table are not built yet."
     }
   ]
 }

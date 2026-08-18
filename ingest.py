@@ -9,6 +9,7 @@ Usage:
     python ingest.py                # pull all 'ready' + 'needs_ua' sources
     python ingest.py --all          # include stale/no-feed sources (will mostly no-op)
     python ingest.py --source flphoenix
+    python ingest.py --source nsf --backfill 30   # walk paginated archive, manual only
 """
 
 import argparse
@@ -28,12 +29,16 @@ ROOT = Path(__file__).parent
 DB_PATH = ROOT / "data" / "articles.db"
 SOURCES_PATH = ROOT / "sources.json"
 
-# A real user-agent. Several FL outlets 402/429 default bot agents.
-UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/127.0 Safari/537.36 "
-    "SecondSource/0.1 (+https://chooseyourbias.com/about)"
-)
+# Identify honestly. We used to send a Chrome/127 string with an identifier
+# appended, on the theory that FL outlets block bot agents. That was wrong and it
+# cost us a source: floridapolitics.com runs an "Update Browser Required" rule
+# that 403s any UA claiming an outdated browser, so the masquerade was the block.
+# Tested 2026-08-18 - this honest UA gets 200 from floridapolitics, tampabay and
+# newsserviceflorida alike. Do not reintroduce a browser string: it earns nothing,
+# it goes stale, and it fails exactly where a named crawler is welcome.
+UA = "SecondSourceBot/0.1 (+https://chooseyourbias.com/about)"
+# Keep the Accept header: tampabay.com's Arc endpoint content-negotiates and
+# returns an unparseable body without it.
 HEADERS = {"User-Agent": UA, "Accept": "application/rss+xml, application/xml, text/html;q=0.9"}
 
 # Politeness. Do not lower these.
@@ -42,6 +47,37 @@ DELAY_BETWEEN_ARTICLES = 1.5
 REQUEST_TIMEOUT = 20
 
 ACTIVE_STATUSES = {"ready", "needs_ua", "headlines_only"}
+
+# Minimum words for stored body text. Shorter than this is a paywall stub or a
+# feed excerpt, not an article.
+MIN_BODY_WORDS = 120
+
+
+def delay_for(src: dict, floor: float) -> float:
+    """Honour a source's robots.txt Crawl-delay. Tallahassee Reports asks for 10s
+    and our floor is 3s; the stricter of the two wins."""
+    return max(float(src.get("crawl_delay") or 0), floor)
+
+
+def entry_author(entry) -> str:
+    return (getattr(entry, "author", "") or "").strip()
+
+
+def body_from_feed(entry) -> str | None:
+    """Extract from content:encoded instead of refetching the article page.
+
+    Used where a feed already carries the whole post. Same extractor as
+    extract_fulltext() so stored text is cleaned identically across sources, and
+    it saves the origin one request per article - which matters on a backfill.
+    """
+    if entry.get("content"):
+        html = entry["content"][0].get("value", "")
+    else:
+        html = entry.get("summary", "")
+    if not html:
+        return None
+    text = trafilatura.extract(html, include_comments=False, include_tables=False)
+    return text if text and len(text.split()) >= MIN_BODY_WORDS else None
 
 
 def init_db(conn):
@@ -84,8 +120,7 @@ def extract_fulltext(url: str) -> str | None:
         if resp.status_code != 200:
             return None
         text = trafilatura.extract(resp.text, include_comments=False, include_tables=False)
-        # Anything this short is a paywall stub, not an article.
-        if text and len(text.split()) >= 120:
+        if text and len(text.split()) >= MIN_BODY_WORDS:
             return text
         return None
     except Exception:
@@ -100,8 +135,35 @@ def parse_published(entry) -> str | None:
     return None
 
 
-def ingest_source(conn, src: dict) -> tuple[int, int, str | None]:
-    feed_url = src.get("feed")
+def paged(base: str, page: int) -> str:
+    return base if page == 1 else f"{base}{'&' if '?' in base else '?'}paged={page}"
+
+
+def ingest_paged(conn, src: dict, max_pages: int) -> tuple[int, int, str | None]:
+    """Walk a feed's pages until one adds nothing new.
+
+    floridapolitics.com publishes ~56 items/day into a 10-item feed, so its
+    window is about four hours. A twice-daily poll of page 1 alone would drop
+    most of its output. Stopping at the first page with no new rows means a quiet
+    day still costs one request.
+    """
+    feed_delay = delay_for(src, DELAY_BETWEEN_FEEDS)
+    seen_entries = total_new = 0
+    for page in range(1, max_pages + 1):
+        entries, new_rows, err = ingest_source(conn, src, feed_url=paged(src["feed"], page))
+        if err:
+            return seen_entries + entries, total_new, err if page == 1 else None
+        seen_entries += entries
+        total_new += new_rows
+        if entries == 0 or new_rows == 0:
+            break
+        if page < max_pages:
+            time.sleep(feed_delay)
+    return seen_entries, total_new, None
+
+
+def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, int, str | None]:
+    feed_url = feed_url or src.get("feed")
     if not feed_url:
         return 0, 0, "no feed configured"
 
@@ -115,10 +177,20 @@ def ingest_source(conn, src: dict) -> tuple[int, int, str | None]:
     entries = parsed.entries or []
     new_rows = 0
     want_fulltext = bool(src.get("fulltext"))
+    from_feed = src.get("fulltext_from") == "feed"
+    article_delay = delay_for(src, DELAY_BETWEEN_ARTICLES)
+
+    # A republisher's main feed also carries the wire copy it reprints, at the
+    # same URL the wire's own source pulls. Excluding by author makes ownership
+    # of that row deterministic instead of a race between the two feeds.
+    excluded = [a.strip().lower() for a in (src.get("exclude_authors") or [])]
 
     for entry in entries:
         url = getattr(entry, "link", None)
         if not url:
+            continue
+        author = entry_author(entry).lower()
+        if any(x in author for x in excluded):
             continue
         aid = article_id(url)
 
@@ -127,8 +199,11 @@ def ingest_source(conn, src: dict) -> tuple[int, int, str | None]:
 
         text = None
         if want_fulltext:
-            text = extract_fulltext(url)
-            time.sleep(DELAY_BETWEEN_ARTICLES)
+            if from_feed:
+                text = body_from_feed(entry)
+            else:
+                text = extract_fulltext(url)
+                time.sleep(article_delay)
 
         conn.execute(
             """INSERT OR IGNORE INTO articles
@@ -153,10 +228,73 @@ def ingest_source(conn, src: dict) -> tuple[int, int, str | None]:
     return len(entries), new_rows, None
 
 
+def repair_source(conn, src: dict) -> tuple[int, int]:
+    """Re-attempt body text for rows stored before a source gained fulltext.
+
+    Flipping a source from headline-only to full text does not retroactively fill
+    rows already in the store - dedupe skips them, so they would stay empty for
+    good. Extraction goes through the article page here, not the feed, because
+    older items have long since fallen out of the feed window.
+    """
+    rows = conn.execute(
+        "SELECT id, url FROM articles WHERE source_id = ? AND fulltext_ok = 0",
+        (src["id"],),
+    ).fetchall()
+    fixed = 0
+
+    if src.get("fulltext_from") == "feed":
+        # Paywalled sources serve a subscriber stub on the article page, so the
+        # feed is the only route to text - which also caps what is recoverable at
+        # whatever still sits inside the feed window.
+        want = {aid for aid, _ in rows}
+        for page in range(1, int(src.get("catchup_pages") or 1) + 1):
+            try:
+                resp = requests.get(paged(src["feed"], page), headers=HEADERS, timeout=REQUEST_TIMEOUT)
+                resp.raise_for_status()
+                entries = feedparser.parse(resp.content).entries or []
+            except Exception as e:
+                print(f"  page {page}: {type(e).__name__}: {e}", file=sys.stderr)
+                break
+            if not entries:
+                break
+            for entry in entries:
+                url = getattr(entry, "link", None)
+                if not url or article_id(url) not in want:
+                    continue
+                text = body_from_feed(entry)
+                if text:
+                    conn.execute(
+                        "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1 WHERE id = ?",
+                        (text, len(text.split()), article_id(url)),
+                    )
+                    fixed += 1
+            time.sleep(delay_for(src, DELAY_BETWEEN_FEEDS))
+    else:
+        delay = delay_for(src, DELAY_BETWEEN_ARTICLES)
+        for aid, url in rows:
+            text = extract_fulltext(url)
+            if text:
+                conn.execute(
+                    "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1 WHERE id = ?",
+                    (text, len(text.split()), aid),
+                )
+                fixed += 1
+            time.sleep(delay)
+
+    conn.commit()
+    return len(rows), fixed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="include inactive sources")
     ap.add_argument("--source", help="single source id")
+    ap.add_argument("--repair", action="store_true",
+                    help="re-attempt full text for stored rows that have none. Requires --source.")
+    ap.add_argument("--backfill", type=int, metavar="PAGES",
+                    help="walk pages 1..N of a paginated feed. Requires --source. "
+                         "Run by hand: a deep backfill outruns the scheduled task's "
+                         "one-hour execution limit.")
     args = ap.parse_args()
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -174,8 +312,51 @@ def main():
         return 1
 
     run_at = datetime.now(timezone.utc).isoformat()
+
+    if args.repair:
+        if len(sources) != 1:
+            print("--repair needs exactly one --source", file=sys.stderr)
+            return 1
+        attempted, fixed = repair_source(conn, sources[0])
+        print(f"{sources[0]['id']}: {fixed} of {attempted} textless rows repaired")
+        conn.close()
+        return 0
+
+    if args.backfill:
+        if len(sources) != 1:
+            print("--backfill needs exactly one --source", file=sys.stderr)
+            return 1
+        src = sources[0]
+        base = src.get("feed")
+        if not base:
+            print(f"{src['id']} has no feed to page through", file=sys.stderr)
+            return 1
+        feed_delay = delay_for(src, DELAY_BETWEEN_FEEDS)
+        for page in range(1, args.backfill + 1):
+            url = base if page == 1 else f"{base}{'&' if '?' in base else '?'}paged={page}"
+            entries, new_rows, err = ingest_source(conn, src, feed_url=url)
+            conn.execute(
+                "INSERT INTO fetch_log (run_at, source_id, entries, new_rows, error) VALUES (?,?,?,?,?)",
+                (run_at, src["id"], entries, new_rows, err),
+            )
+            conn.commit()
+            print(f"  page {page:>3}  {'ERROR ' + str(err) if err else f'{entries} entries, {new_rows} new'}")
+            # An empty page is the end of the archive, not a failure.
+            if err or entries == 0:
+                break
+            time.sleep(feed_delay)
+        total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        print()
+        print(f"store: {total} articles")
+        conn.close()
+        return 0
+
     for src in sources:
-        entries, new_rows, err = ingest_source(conn, src)
+        pages = int(src.get("catchup_pages") or 1)
+        if pages > 1 and src.get("feed"):
+            entries, new_rows, err = ingest_paged(conn, src, pages)
+        else:
+            entries, new_rows, err = ingest_source(conn, src)
         conn.execute(
             "INSERT INTO fetch_log (run_at, source_id, entries, new_rows, error) VALUES (?,?,?,?,?)",
             (run_at, src["id"], entries, new_rows, err),
@@ -183,7 +364,7 @@ def main():
         conn.commit()
         status = f"ERROR {err}" if err else f"{entries} entries, {new_rows} new"
         print(f"{src['id']:18} {status}")
-        time.sleep(DELAY_BETWEEN_FEEDS)
+        time.sleep(delay_for(src, DELAY_BETWEEN_FEEDS))
 
     total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
     ft = conn.execute("SELECT COUNT(*) FROM articles WHERE fulltext_ok = 1").fetchone()[0]
