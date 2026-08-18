@@ -133,11 +133,11 @@
       "id": "orlandosentinel",
       "name": "Orlando Sentinel",
       "feed": null,
-      "status": "deferred_v1",
+      "status": "prohibited",
       "fulltext": false,
       "paywall": "hard",
       "prior_lean": "center",
-      "notes": "403s an honest crawler (tested 2026-08-18, both /feed/ and the Arc outbound path). Existence trackable via sayfie."
+      "notes": "DO NOT CRAWL. robots.txt (read 2026-08-18) carries a written Tribune Publishing prohibition covering: text and data mining as an EU DSM Art. 4 rights reservation; use for 'retrieval augmented generation, grounding, training, or development of machine learning models'; caching or archiving; and any commercial purpose. Its User-agent:* stanza only blocks wp-admin paths, so article paths are technically crawlable - the prohibition is in prose referencing tribpub.com terms. Blocks anthropic-ai / ClaudeBot / Claude-Web / Claude-User / GPTBot / CCBot, and Archive.org_bot + ia_archiver, so no Wayback route. Separately 403s an honest crawler on /feed/ and the Arc path. Notably allow-lists commercial partners (AmazonAdBot, grapeshot, Twitterbot, EchoboxBot, mrfCompass) while excluding independent analysis - a documentable gatekeeping asymmetry. sun-sentinel.com is the same Tribune stable and presumably identical terms; Sayfie links it x13, so existence stays trackable there too."
     },
     {
       "id": "talldemocrat",
