@@ -15,9 +15,9 @@ each other. Feed contents drift -- flpolitics went 30 -> 60 entries in the
 nine hours between two runs on 2026-08-18 -- so an old ingest log is not a
 valid control.
 
-Probes the feed AND articles per source. A feed returning 200 while the
-article HTML 403s is the false pass: every active source is fulltext, so
-losing article fetch loses the source.
+Probes the feed AND, where ingest.py fetches them, the article pages. A feed
+returning 200 while the article HTML 403s is the false pass for a page-route
+source: it is fulltext, so losing article fetch loses the source.
 
 Samples SAMPLE_ARTICLES articles rather than one. The first item in a feed is
 often a brief, a gallery or a live blog that is legitimately under the word
@@ -25,6 +25,16 @@ floor -- tampabay.com's Arc feed does this -- and a single short sample is
 indistinguishable from a Cloudflare interstitial, which also extracts to
 almost nothing. Several samples separate them: a real block is short on every
 one, a short brief is short on one.
+
+Probes each source by the route ingest.py actually uses. Sources carrying
+fulltext_from 'feed' are read from content:encoded and their article pages are
+never fetched, so probing those pages measures nothing this pipeline depends
+on. It also reports false failure: tampabay.com serves every article page an
+identical 75-word subscriber-comments block, which read as THIN here on
+2026-08-19 and looked like a metered paywall that our own probing had
+exhausted. It was neither -- the Arc feed was carrying full text the whole
+time, on the same network, in the same minute. Probing by route removes the
+false alarm and the pointless requests at once.
 
 Usage:  python probe.py           # table to stdout, JSON to stderr
         python probe.py --json    # JSON only
@@ -57,10 +67,25 @@ from ingest import (
 SAMPLE_ARTICLES = 3
 
 
+def feed_body_words(entry) -> int:
+    """Words ingest.py would get from this entry's content:encoded.
+
+    Mirrors ingest.body_from_feed() minus the MIN_BODY_WORDS floor - the floor
+    is applied in the verdict below, so a short entry stays visible as a number
+    instead of collapsing to zero.
+    """
+    html = entry["content"][0].get("value", "") if entry.get("content") else entry.get("summary", "")
+    if not html:
+        return 0
+    text = trafilatura.extract(html, include_comments=False, include_tables=False)
+    return len(text.split()) if text else 0
+
+
 def probe_source(src: dict) -> dict:
     """Fetch a source's feed, then several articles from it. Never raises."""
     row = {
         "id": src["id"],
+        "route": "feed" if src.get("fulltext_from") == "feed" else "page",
         "feed_status": None,
         "entries": 0,
         "article_statuses": [],
@@ -84,6 +109,14 @@ def probe_source(src: dict) -> dict:
             return row
     except Exception as e:
         row["error"] = f"{type(e).__name__}: {e}"
+        return row
+
+    if row["route"] == "feed":
+        # The feed is the whole route. It answered 200 above with parseable
+        # entries, so the network is served; all that is left is whether the
+        # bodies are there. Costs the origin nothing beyond the feed request.
+        row["article_words"] = [feed_body_words(e) for e in parsed.entries[:SAMPLE_ARTICLES]]
+        row["verdict"] = "OK" if any(w >= MIN_BODY_WORDS for w in row["article_words"]) else "THIN"
         return row
 
     links = [e["link"] for e in parsed.entries if e.get("link")][:SAMPLE_ARTICLES]
@@ -150,13 +183,13 @@ def main() -> int:
         return 1 if any(r["verdict"] != "OK" for r in rows) else 0
 
     print(f"probe {report['probed_at']}  host={report['host']}")
-    print(f"{'source':20} {'feed':>5} {'entries':>7}  {'articles':<14} {'words':<18} verdict")
+    print(f"{'source':20} {'route':<5} {'feed':>5} {'entries':>7}  {'articles':<14} {'words':<18} verdict")
     for r in rows:
         st = ",".join(str(s or "-") for s in r["article_statuses"]) or "-"
         wd = ",".join(str(w) for w in r["article_words"]) or "-"
         best = max(r["article_words"], default=0)
         print(
-            f"{r['id']:20} {str(r['feed_status'] or '-'):>5} {r['entries']:>7}  "
+            f"{r['id']:20} {r['route']:<5} {str(r['feed_status'] or '-'):>5} {r['entries']:>7}  "
             f"{st:<14} {wd:<18} {r['verdict']} (best {best})"
             + (f"  {r['error']}" if r["error"] else "")
         )
