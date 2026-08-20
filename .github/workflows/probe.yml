@@ -1,17 +1,18 @@
-# One-off diagnostic: does the honest UA still get 200 from GitHub's runner IPs?
+# On-demand diagnostic: does the honest UA still get 200 from the runner's IPs?
 #
 # Cloudflare weighs UA and client IP together. floridapolitics.com 403'd until
-# 2026-08-18 and unblocking it was a deliberate win, so before moving ingestion
-# onto Actions we check that Azure's ranges do not undo it.
+# 2026-08-18 and unblocking it was a deliberate win, so it was checked from a
+# runner before ingestion moved here - byte-identical to the laptop, 7/7 OK.
 #
-# Triggered by pushing this branch rather than workflow_dispatch, because a
-# dispatchable workflow has to exist on the default branch first and this one
-# should not land on main.
+# Kept rather than deleted, because it answers a question that recurs: if a
+# source starts failing only in Actions, run this before touching ingest.py.
+# probe.py follows each source's configured route, so it measures what the
+# pipeline actually depends on.
+#
+#   gh workflow run probe.yml --ref main
 name: ip-probe
 
 on:
-  push:
-    branches: [ci/ip-probe]
   workflow_dispatch:
 
 jobs:
