@@ -80,6 +80,60 @@ def body_from_feed(entry) -> str | None:
     return text if text and len(text.split()) >= MIN_BODY_WORDS else None
 
 
+def body_sha(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def accept_body(conn, source_id: str, url: str, text: str | None) -> tuple[str | None, str | None]:
+    """Drop a body this source has already stored word for word at another URL.
+
+    Two articles from one outlet never share a body verbatim. When they do, the
+    extractor has locked onto page furniture rather than the story. tampabay.com
+    is the live example: its article pages return an identical 75-word
+    subscriber-comments block for every story, whatever the article. That one is
+    caught by MIN_BODY_WORDS today, but the floor is the wrong guard - a wall
+    longer than 120 words would be stored as real text and read as healthy,
+    because nothing downstream compares one body against another.
+
+    Rejecting the duplicate also demotes the first copy, which was stored before
+    there was anything to compare it against. The effect is that the source's
+    extraction rate collapses, which is the condition health.py already alarms
+    on - so this failure surfaces through the existing alarm instead of needing
+    a new one.
+
+    A demoted row keeps its body_sha after losing its text. The hash is the only
+    record that this fingerprint is known bad, and dropping it makes the guard
+    flip-flop: the next URL would find nothing to match, be accepted, and every
+    other article would land in the store as boilerplate.
+
+    Scoped to one source_id on purpose. Two outlets legitimately carry the same
+    body - that is wire copy, which is the point of the NSF anchor - and only a
+    repeat within a single outlet means the extractor is reading furniture.
+    """
+    if not text:
+        return None, None
+    sha = body_sha(text)
+    dupes = conn.execute(
+        "SELECT id, fulltext_ok FROM articles WHERE source_id = ? AND body_sha = ? AND url <> ?",
+        (source_id, sha, url),
+    ).fetchall()
+    if not dupes:
+        return text, sha
+    demote = [(d[0],) for d in dupes if d[1]]
+    if demote:
+        conn.executemany(
+            "UPDATE articles SET raw_text = NULL, word_count = 0, fulltext_ok = 0 WHERE id = ?",
+            demote,
+        )
+    print(
+        f"  {source_id}: boilerplate body ({len(text.split())} words) seen at "
+        f"{len(dupes) + 1} URLs - rejected"
+        + (f", {len(demote)} earlier row(s) demoted" if demote else ""),
+        file=sys.stderr,
+    )
+    return None, None
+
+
 def init_db(conn):
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS articles (
@@ -92,6 +146,7 @@ def init_db(conn):
             raw_text        TEXT,
             word_count      INTEGER,
             fulltext_ok     INTEGER NOT NULL DEFAULT 0,
+            body_sha        TEXT,
             scored          INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_source  ON articles(source_id);
@@ -106,6 +161,22 @@ def init_db(conn):
             error       TEXT
         );
     """)
+
+    # body_sha arrived after the first stores. Add it and backfill, so the
+    # duplicate-body guard can compare against history on its first run.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles)")}
+    if "body_sha" not in cols:
+        conn.execute("ALTER TABLE articles ADD COLUMN body_sha TEXT")
+        conn.executemany(
+            "UPDATE articles SET body_sha = ? WHERE id = ?",
+            [
+                (body_sha(t), i)
+                for i, t in conn.execute(
+                    "SELECT id, raw_text FROM articles WHERE raw_text IS NOT NULL"
+                ).fetchall()
+            ],
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_body_sha ON articles(source_id, body_sha)")
     conn.commit()
 
 
@@ -204,12 +275,13 @@ def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, in
             else:
                 text = extract_fulltext(url)
                 time.sleep(article_delay)
+        text, sha = accept_body(conn, src["id"], url, text)
 
         conn.execute(
             """INSERT OR IGNORE INTO articles
                (id, source_id, url, title, published_at, fetched_at,
-                raw_text, word_count, fulltext_ok, scored)
-               VALUES (?,?,?,?,?,?,?,?,?,0)""",
+                raw_text, word_count, fulltext_ok, body_sha, scored)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
             (
                 aid,
                 src["id"],
@@ -220,6 +292,7 @@ def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, in
                 text,
                 len(text.split()) if text else 0,
                 1 if text else 0,
+                sha,
             ),
         )
         new_rows += 1
@@ -261,22 +334,24 @@ def repair_source(conn, src: dict) -> tuple[int, int]:
                 url = getattr(entry, "link", None)
                 if not url or article_id(url) not in want:
                     continue
-                text = body_from_feed(entry)
+                text, sha = accept_body(conn, src["id"], url, body_from_feed(entry))
                 if text:
                     conn.execute(
-                        "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1 WHERE id = ?",
-                        (text, len(text.split()), article_id(url)),
+                        "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1,"
+                        " body_sha = ? WHERE id = ?",
+                        (text, len(text.split()), sha, article_id(url)),
                     )
                     fixed += 1
             time.sleep(delay_for(src, DELAY_BETWEEN_FEEDS))
     else:
         delay = delay_for(src, DELAY_BETWEEN_ARTICLES)
         for aid, url in rows:
-            text = extract_fulltext(url)
+            text, sha = accept_body(conn, src["id"], url, extract_fulltext(url))
             if text:
                 conn.execute(
-                    "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1 WHERE id = ?",
-                    (text, len(text.split()), aid),
+                    "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1,"
+                    " body_sha = ? WHERE id = ?",
+                    (text, len(text.split()), sha, aid),
                 )
                 fixed += 1
             time.sleep(delay)

@@ -1,0 +1,41 @@
+# One-off diagnostic: does the honest UA still get 200 from GitHub's runner IPs?
+#
+# Cloudflare weighs UA and client IP together. floridapolitics.com 403'd until
+# 2026-08-18 and unblocking it was a deliberate win, so before moving ingestion
+# onto Actions we check that Azure's ranges do not undo it.
+#
+# Triggered by pushing this branch rather than workflow_dispatch, because a
+# dispatchable workflow has to exist on the default branch first and this one
+# should not land on main.
+name: ip-probe
+
+on:
+  push:
+    branches: [ci/ip-probe]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Record which network we are judging, so a pass or fail can be attributed
+      # to a specific range rather than to "Actions" in the abstract.
+      - name: Runner network
+        run: curl -s https://ipinfo.io/json || true
+
+      # continue-on-error: probe.py exits non-zero if any source is not OK, and
+      # tbtimes is expected to come back THIN from every network right now (it
+      # serves a 75-word subscriber wall). A red job here would be misleading;
+      # the table in the log is the result.
+      - name: Probe
+        continue-on-error: true
+        run: python probe.py
