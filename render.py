@@ -106,16 +106,30 @@ def load_sources() -> dict:
     return {s["id"]: s for s in data["sources"]}
 
 
-def fmt_date(iso: str | None) -> str:
-    if not iso:
+def fmt_date(value) -> str:
+    """Format a timestamp for display, from a datetime or an ISO string.
+
+    published_at and fetched_at are TIMESTAMPTZ, so psycopg hands back datetime
+    objects where SQLite returned the ISO text it was given. Strings still
+    reach here from elsewhere, so both are accepted - same reason health.py's
+    parse() takes either.
+
+    The two strftime attempts are a platform split, not a type one: %-d strips
+    the leading zero on glibc and raises on Windows, where the fallback trims
+    it by hand.
+    """
+    if not value:
         return ""
-    try:
-        return datetime.fromisoformat(iso).strftime("%b %-d, %Y")
-    except (ValueError, TypeError):
+    dt = value if isinstance(value, datetime) else None
+    if dt is None:
         try:
-            return datetime.fromisoformat(iso).strftime("%b %d, %Y").replace(" 0", " ")
+            dt = datetime.fromisoformat(value)
         except (ValueError, TypeError):
-            return iso[:10]
+            return str(value)[:10]
+    try:
+        return dt.strftime("%b %-d, %Y")
+    except ValueError:
+        return dt.strftime("%b %d, %Y").replace(" 0", " ")
 
 
 def pct(part: float, whole: float) -> float:
