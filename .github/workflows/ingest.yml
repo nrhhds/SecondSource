@@ -1,0 +1,73 @@
+# Second Source - twice-daily ingestion.
+#
+# Replaces the Windows scheduled task 'SecondSource Ingest', which only ran
+# while the laptop was logged on and awake. On an S0 Modern Standby machine the
+# 07:00 and 19:00 wake timers did not fire: runs landed hours late as
+# StartWhenAvailable catch-ups whenever the lid next opened, and
+# NumberOfMissedRuns stayed 0 the whole time because a catch-up is not counted
+# as a miss. Max tolerable outage is ~2 days - Florida's Voice and NSF expose
+# only ~2 days of items and lose coverage permanently - so lateness was eating
+# real margin.
+#
+# There is no data/ingest.log here. The durable record is the fetch_log table,
+# which health.py reads; this workflow's output is the human-readable copy.
+name: ingest
+
+on:
+  schedule:
+    # 11:00 and 23:00 UTC = 07:00 and 19:00 EDT. GitHub cron is UTC only, so
+    # these land at 06:00/18:00 local through EST. The property that matters is
+    # two runs ~12h apart, which holds year round.
+    - cron: '0 11,23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two ingests at once would race each other on the same rows. The scheduled
+# task expressed this as MultipleInstances IgnoreNew; queue rather than cancel,
+# so a manual run during a scheduled one waits instead of being discarded.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    # The scheduled task capped a run at one hour. Normal runs take ~4 minutes.
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LEGISCAN_API_KEY: ${{ secrets.LEGISCAN_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Applies schema.sql itself (idempotent), so a fresh database needs no
+      # bootstrap step. Per-source failures are recorded in fetch_log rather
+      # than raised, so a non-zero exit here is structural and should be loud.
+      - name: Ingest
+        run: python ingest.py
+
+      # Silent unless LegiScan adds an FL session, which is how the 2027 session
+      # announces itself instead of being polled by hand.
+      #
+      # continue-on-error is load-bearing. A failing step aborts the job, so
+      # without it a LegiScan outage would stop health.py from running at all
+      # and mask "a source is in ALARM" - the exact substitution the scheduled
+      # task avoided by ordering bills before health and exiting with health's
+      # code.
+      - name: Watch for new LegiScan sessions
+        continue-on-error: true
+        run: python bills.py watch --quiet
+
+      # The alarm. Exits 1 if any source is in ALARM, failing the workflow and
+      # triggering GitHub's failure notification.
+      - name: Health
+        run: python health.py --quiet

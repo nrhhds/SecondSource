@@ -16,8 +16,10 @@ Four failure modes, all of which look like success in ingest.py's output:
     4. extraction broken - articles arrive but full text stops extracting,
                            e.g. after a site redesign
 
-Exit code is 1 if anything is ALARM, so a scheduled run surfaces it via
-LastTaskResult instead of needing to be read.
+Exit code is 1 if anything is ALARM, so a scheduled run surfaces it without
+anyone reading the output: the GitHub Actions step fails and the workflow sends
+a failure notification. (It served the same purpose as the Windows scheduled
+task's LastTaskResult before ingestion moved off the laptop.)
 
 Usage:
     python health.py
@@ -26,13 +28,13 @@ Usage:
 
 import argparse
 import json
-import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import db
+
 ROOT = Path(__file__).parent
-DB_PATH = ROOT / "data" / "articles.db"
 SOURCES_PATH = ROOT / "sources.json"
 
 # Runs are scheduled twice daily. Past this, the scheduler itself is suspect.
@@ -55,12 +57,21 @@ OK, WARN, ALARM = "OK", "WARN", "ALARM"
 RANK = {OK: 0, WARN: 1, ALARM: 2}
 
 
-def parse(ts: str | None) -> datetime | None:
+def parse(ts) -> datetime | None:
+    """Accept a datetime or an ISO string.
+
+    The timestamp columns are TIMESTAMPTZ, so psycopg returns datetime objects
+    where SQLite handed back whatever ISO text it was given. Tolerating both
+    keeps this usable against either, rather than silently depending on one
+    driver's type mapping.
+    """
     if not ts:
         return None
+    if isinstance(ts, datetime):
+        return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
     try:
         dt = datetime.fromisoformat(ts)
-    except ValueError:
+    except (TypeError, ValueError):
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
@@ -100,12 +111,14 @@ def check(conn, src: dict, now: datetime) -> dict:
     state, notes = OK, []
 
     last = conn.execute(
-        "SELECT run_at, entries, error FROM fetch_log WHERE source_id = ? ORDER BY run_at DESC LIMIT 1",
+        f"SELECT run_at, entries, error FROM {db.TABLES}.fetch_log"
+        " WHERE source_id = %s ORDER BY run_at DESC LIMIT 1",
         (sid,),
     ).fetchone()
 
     rows = conn.execute(
-        "SELECT published_at FROM articles WHERE source_id = ? AND published_at IS NOT NULL",
+        f"SELECT published_at FROM {db.TABLES}.articles"
+        " WHERE source_id = %s AND published_at IS NOT NULL",
         (sid,),
     ).fetchall()
     pub_times = [p for p in (parse(r[0]) for r in rows) if p]
@@ -137,8 +150,8 @@ def check(conn, src: dict, now: datetime) -> dict:
 
     if src.get("fulltext"):
         recent = conn.execute(
-            """SELECT COUNT(*), COALESCE(SUM(fulltext_ok), 0) FROM articles
-               WHERE source_id = ? AND fetched_at >= datetime('now', '-14 days')""",
+            f"""SELECT COUNT(*), COALESCE(SUM(fulltext_ok), 0) FROM {db.TABLES}.articles
+                WHERE source_id = %s AND fetched_at >= now() - interval '14 days'""",
             (sid,),
         ).fetchone()
         n, ok = recent
@@ -159,18 +172,22 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true", help="print only WARN and ALARM rows")
     args = ap.parse_args()
 
-    if not DB_PATH.exists():
-        print(f"no database at {DB_PATH} - run ingest.py first", file=sys.stderr)
-        return 1
-
     now = datetime.now(timezone.utc)
-    conn = sqlite3.connect(DB_PATH)
+    conn = db.connect()
+
+    # Replaces a check that the SQLite file existed. Connecting proves nothing
+    # about a hosted database, so ask whether the schema is actually there -
+    # otherwise every source below reports "never attempted" and buries the one
+    # fact that matters, which is that ingest.py has not run here.
+    if conn.execute(f"SELECT to_regclass('{db.TABLES}.fetch_log')").fetchone()[0] is None:
+        print(f"no {db.TABLES} tables in the database - run ingest.py first", file=sys.stderr)
+        return 1
     sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))["sources"]
     active = [s for s in sources if s.get("status") in {"ready", "needs_ua", "headlines_only"}]
 
     # Pipeline first: if the scheduler is dead, every source below is a symptom,
     # not a cause, and reporting six alarms would bury the one that matters.
-    row = conn.execute("SELECT MAX(run_at) FROM fetch_log").fetchone()
+    row = conn.execute(f"SELECT MAX(run_at) FROM {db.TABLES}.fetch_log").fetchone()
     since = hours_since(parse(row[0]), now) if row and row[0] else None
     if since is None:
         print(f"{'PIPELINE':10} {ALARM:6} no runs recorded")

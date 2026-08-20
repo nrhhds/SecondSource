@@ -2,7 +2,7 @@
 """
 Second Source - daily ingestion.
 
-Pulls articles from configured feeds into a local SQLite store.
+Pulls articles from configured feeds into Postgres (see db.py).
 Stores raw text only. Never republishes. Scoring is a separate step.
 
 Usage:
@@ -15,7 +15,6 @@ Usage:
 import argparse
 import hashlib
 import json
-import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -25,8 +24,9 @@ import feedparser
 import requests
 import trafilatura
 
+import db
+
 ROOT = Path(__file__).parent
-DB_PATH = ROOT / "data" / "articles.db"
 SOURCES_PATH = ROOT / "sources.json"
 
 # Identify honestly. We used to send a Chrome/127 string with an identifier
@@ -114,17 +114,22 @@ def accept_body(conn, source_id: str, url: str, text: str | None) -> tuple[str |
         return None, None
     sha = body_sha(text)
     dupes = conn.execute(
-        "SELECT id, fulltext_ok FROM articles WHERE source_id = ? AND body_sha = ? AND url <> ?",
+        f"SELECT id, fulltext_ok FROM {db.TABLES}.articles"
+        " WHERE source_id = %s AND body_sha = %s AND url <> %s",
         (source_id, sha, url),
     ).fetchall()
     if not dupes:
         return text, sha
     demote = [(d[0],) for d in dupes if d[1]]
     if demote:
-        conn.executemany(
-            "UPDATE articles SET raw_text = NULL, word_count = 0, fulltext_ok = 0 WHERE id = ?",
-            demote,
-        )
+        # psycopg puts executemany on the cursor only; sqlite3's connection-level
+        # shortcut does not exist here.
+        with conn.cursor() as cur:
+            cur.executemany(
+                f"UPDATE {db.TABLES}.articles"
+                " SET raw_text = NULL, word_count = 0, fulltext_ok = 0 WHERE id = %s",
+                demote,
+            )
     print(
         f"  {source_id}: boilerplate body ({len(text.split())} words) seen at "
         f"{len(dupes) + 1} URLs - rejected"
@@ -132,52 +137,6 @@ def accept_body(conn, source_id: str, url: str, text: str | None) -> tuple[str |
         file=sys.stderr,
     )
     return None, None
-
-
-def init_db(conn):
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS articles (
-            id              TEXT PRIMARY KEY,
-            source_id       TEXT NOT NULL,
-            url             TEXT NOT NULL UNIQUE,
-            title           TEXT,
-            published_at    TEXT,
-            fetched_at      TEXT NOT NULL,
-            raw_text        TEXT,
-            word_count      INTEGER,
-            fulltext_ok     INTEGER NOT NULL DEFAULT 0,
-            body_sha        TEXT,
-            scored          INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS idx_source  ON articles(source_id);
-        CREATE INDEX IF NOT EXISTS idx_pubdate ON articles(published_at);
-        CREATE INDEX IF NOT EXISTS idx_scored  ON articles(scored);
-
-        CREATE TABLE IF NOT EXISTS fetch_log (
-            run_at      TEXT NOT NULL,
-            source_id   TEXT NOT NULL,
-            entries     INTEGER,
-            new_rows    INTEGER,
-            error       TEXT
-        );
-    """)
-
-    # body_sha arrived after the first stores. Add it and backfill, so the
-    # duplicate-body guard can compare against history on its first run.
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles)")}
-    if "body_sha" not in cols:
-        conn.execute("ALTER TABLE articles ADD COLUMN body_sha TEXT")
-        conn.executemany(
-            "UPDATE articles SET body_sha = ? WHERE id = ?",
-            [
-                (body_sha(t), i)
-                for i, t in conn.execute(
-                    "SELECT id, raw_text FROM articles WHERE raw_text IS NOT NULL"
-                ).fetchall()
-            ],
-        )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_body_sha ON articles(source_id, body_sha)")
-    conn.commit()
 
 
 def article_id(url: str) -> str:
@@ -265,7 +224,7 @@ def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, in
             continue
         aid = article_id(url)
 
-        if conn.execute("SELECT 1 FROM articles WHERE id = ?", (aid,)).fetchone():
+        if conn.execute(f"SELECT 1 FROM {db.TABLES}.articles WHERE id = %s", (aid,)).fetchone():
             continue
 
         text = None
@@ -277,11 +236,15 @@ def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, in
                 time.sleep(article_delay)
         text, sha = accept_body(conn, src["id"], url, text)
 
+        # ON CONFLICT with no target matches INSERT OR IGNORE: both swallow a
+        # violation of any unique constraint, here the id primary key or the
+        # url unique index.
         conn.execute(
-            """INSERT OR IGNORE INTO articles
-               (id, source_id, url, title, published_at, fetched_at,
-                raw_text, word_count, fulltext_ok, body_sha, scored)
-               VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
+            f"""INSERT INTO {db.TABLES}.articles
+                (id, source_id, url, title, published_at, fetched_at,
+                 raw_text, word_count, fulltext_ok, body_sha, scored)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0)
+                ON CONFLICT DO NOTHING""",
             (
                 aid,
                 src["id"],
@@ -310,7 +273,7 @@ def repair_source(conn, src: dict) -> tuple[int, int]:
     older items have long since fallen out of the feed window.
     """
     rows = conn.execute(
-        "SELECT id, url FROM articles WHERE source_id = ? AND fulltext_ok = 0",
+        f"SELECT id, url FROM {db.TABLES}.articles WHERE source_id = %s AND fulltext_ok = 0",
         (src["id"],),
     ).fetchall()
     fixed = 0
@@ -337,8 +300,8 @@ def repair_source(conn, src: dict) -> tuple[int, int]:
                 text, sha = accept_body(conn, src["id"], url, body_from_feed(entry))
                 if text:
                     conn.execute(
-                        "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1,"
-                        " body_sha = ? WHERE id = ?",
+                        f"UPDATE {db.TABLES}.articles SET raw_text = %s, word_count = %s,"
+                        " fulltext_ok = 1, body_sha = %s WHERE id = %s",
                         (text, len(text.split()), sha, article_id(url)),
                     )
                     fixed += 1
@@ -349,8 +312,8 @@ def repair_source(conn, src: dict) -> tuple[int, int]:
             text, sha = accept_body(conn, src["id"], url, extract_fulltext(url))
             if text:
                 conn.execute(
-                    "UPDATE articles SET raw_text = ?, word_count = ?, fulltext_ok = 1,"
-                    " body_sha = ? WHERE id = ?",
+                    f"UPDATE {db.TABLES}.articles SET raw_text = %s, word_count = %s,"
+                    " fulltext_ok = 1, body_sha = %s WHERE id = %s",
                     (text, len(text.split()), sha, aid),
                 )
                 fixed += 1
@@ -372,9 +335,8 @@ def main():
                          "one-hour execution limit.")
     args = ap.parse_args()
 
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    init_db(conn)
+    conn = db.connect()
+    db.apply_schema(conn)
 
     sources = json.loads(SOURCES_PATH.read_text())["sources"]
     if args.source:
@@ -411,7 +373,8 @@ def main():
             url = base if page == 1 else f"{base}{'&' if '?' in base else '?'}paged={page}"
             entries, new_rows, err = ingest_source(conn, src, feed_url=url)
             conn.execute(
-                "INSERT INTO fetch_log (run_at, source_id, entries, new_rows, error) VALUES (?,?,?,?,?)",
+                f"INSERT INTO {db.TABLES}.fetch_log (run_at, source_id, entries, new_rows, error)"
+                " VALUES (%s,%s,%s,%s,%s)",
                 (run_at, src["id"], entries, new_rows, err),
             )
             conn.commit()
@@ -420,7 +383,7 @@ def main():
             if err or entries == 0:
                 break
             time.sleep(feed_delay)
-        total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        total = conn.execute(f"SELECT COUNT(*) FROM {db.TABLES}.articles").fetchone()[0]
         print()
         print(f"store: {total} articles")
         conn.close()
@@ -433,7 +396,8 @@ def main():
         else:
             entries, new_rows, err = ingest_source(conn, src)
         conn.execute(
-            "INSERT INTO fetch_log (run_at, source_id, entries, new_rows, error) VALUES (?,?,?,?,?)",
+            f"INSERT INTO {db.TABLES}.fetch_log (run_at, source_id, entries, new_rows, error)"
+            " VALUES (%s,%s,%s,%s,%s)",
             (run_at, src["id"], entries, new_rows, err),
         )
         conn.commit()
@@ -441,8 +405,9 @@ def main():
         print(f"{src['id']:18} {status}")
         time.sleep(delay_for(src, DELAY_BETWEEN_FEEDS))
 
-    total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
-    ft = conn.execute("SELECT COUNT(*) FROM articles WHERE fulltext_ok = 1").fetchone()[0]
+    total = conn.execute(f"SELECT COUNT(*) FROM {db.TABLES}.articles").fetchone()[0]
+    ft = conn.execute(
+        f"SELECT COUNT(*) FROM {db.TABLES}.articles WHERE fulltext_ok = 1").fetchone()[0]
     print(f"\nstore: {total} articles, {ft} with full text")
     conn.close()
     return 0

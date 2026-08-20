@@ -75,8 +75,37 @@ CREATE TABLE IF NOT EXISTS secondsource.fetch_log (
 );
 
 -- ---------------------------------------------------------------------------
+-- LegiScan session watch
+-- ---------------------------------------------------------------------------
+-- Replaces data/legiscan/known_sessions.json, which cannot work on a runner
+-- with no persistent filesystem. That is not a cosmetic difference: data/ is
+-- gitignored, so in GitHub Actions the file never exists, `bills.py watch`
+-- takes its "seed the baseline" branch on every run, --quiet swallows the
+-- message, and the watch for the 2027 session is dead while still exiting 0.
+--
+-- 'pending' distinguishes a session we have decided to care about from the
+-- historical ones seeded at baseline, which must never nag. It mirrors the
+-- 'pending' list in the JSON file exactly.
+--
+-- pulled_at is an improvement on what it replaces: the old check was
+-- (DATA / "FL_<id>").exists(), a local filesystem test that can only be true
+-- on the machine that ran the pull. Recording it here means a pull on the
+-- laptop silences the nag in Actions.
+CREATE TABLE IF NOT EXISTS secondsource.legiscan_sessions (
+    session_id      TEXT PRIMARY KEY,
+    session_name    TEXT,
+    first_seen      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    pending         BOOLEAN NOT NULL DEFAULT false,
+    pulled_at       TIMESTAMPTZ
+);
+
+-- ---------------------------------------------------------------------------
 -- Scores and receipts
 -- ---------------------------------------------------------------------------
+-- One row per signal per article per rubric version. Long format on purpose:
+-- adding a signal to the rubric must never require a schema migration, and
+-- "every score is stamped with its rubric version" falls out of the key.
+--
 -- DOUBLE PRECISION, not REAL. SQLite's REAL is an 8-byte IEEE float; Postgres
 -- REAL is 4-byte. Rule 7 requires scores be regenerable from a rubric version
 -- and a URL, so silently narrowing float width would make old scores fail to
@@ -95,6 +124,8 @@ CREATE TABLE IF NOT EXISTS secondsource.scores (
 );
 CREATE INDEX IF NOT EXISTS idx_scores_article ON secondsource.scores(article_id);
 
+-- The receipts. A score with no receipt is an assertion, so these are stored
+-- alongside rather than regenerated for display.
 CREATE TABLE IF NOT EXISTS secondsource.receipts (
     article_id      TEXT NOT NULL,
     rubric_version  TEXT NOT NULL,
@@ -105,6 +136,8 @@ CREATE TABLE IF NOT EXISTS secondsource.receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_receipts ON secondsource.receipts(article_id, signal);
 
+-- Enumerated reason codes only. Design rule 2: no human approves a score, so
+-- this is the sole mechanism for pulling one, and every row is published.
 CREATE TABLE IF NOT EXISTS secondsource.withdrawals (
     article_id      TEXT NOT NULL,
     code            TEXT NOT NULL
@@ -133,8 +166,9 @@ CREATE TABLE IF NOT EXISTS secondsource.cluster_members (
 -- ---------------------------------------------------------------------------
 -- Layer 2: RLS on, no policies -> deny by default for anon and authenticated
 -- ---------------------------------------------------------------------------
-ALTER TABLE secondsource.articles        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE secondsource.fetch_log       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secondsource.articles           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secondsource.fetch_log          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secondsource.legiscan_sessions  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE secondsource.scores          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE secondsource.receipts        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE secondsource.withdrawals     ENABLE ROW LEVEL SECURITY;

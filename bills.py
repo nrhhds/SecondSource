@@ -37,10 +37,11 @@ from pathlib import Path
 
 import requests
 
+import db
+
 ROOT = Path(__file__).parent
 DATA = ROOT / "data" / "legiscan"
 ENV_PATH = ROOT / ".env"
-KNOWN_SESSIONS_PATH = DATA / "known_sessions.json"
 
 API = "https://api.legiscan.com/"
 STATE = "FL"
@@ -99,9 +100,28 @@ def cmd_list(_args) -> int:
     return 0
 
 
-def save_known(state: dict) -> None:
-    DATA.mkdir(parents=True, exist_ok=True)
-    KNOWN_SESSIONS_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+def mark_pulled(session_id) -> None:
+    """Record that a session's dataset has been pulled.
+
+    Best effort on purpose. `pull` is run by hand and must not start failing on
+    a machine with no DATABASE_URL just because it now reports upward; the only
+    consequence of the warning path is that `watch` keeps nagging.
+    """
+    try:
+        conn = db.connect()
+    except SystemExit:
+        print("  note: DATABASE_URL not set, so 'watch' will keep listing this "
+              "session as unpulled", file=sys.stderr)
+        return
+    # psycopg's connection context manager commits and closes on exit.
+    with conn:
+        conn.execute(
+            f"""INSERT INTO {db.TABLES}.legiscan_sessions
+                (session_id, pending, pulled_at) VALUES (%s, false, now())
+                ON CONFLICT (session_id) DO UPDATE
+                SET pulled_at = now(), pending = false""",
+            (str(session_id),),
+        )
 
 
 def cmd_watch(args) -> int:
@@ -109,11 +129,16 @@ def cmd_watch(args) -> int:
 
     The 2027 session cannot be pulled until Florida opens prefiling for it, and
     checking by hand is the chore that quietly gets dropped for three months.
-    Runs alongside the twice-daily ingest so the session's arrival lands in
-    ingest.log rather than waiting to be remembered.
+    Runs alongside the twice-daily ingest so the session's arrival announces
+    itself instead of waiting to be remembered.
 
-    A new session stays loud every run until its dataset is on disk. Announcing
+    A new session stays loud every run until its dataset is pulled. Announcing
     once would put the whole point of this on a single log line nobody read.
+
+    State lives in Postgres rather than data/legiscan/known_sessions.json.
+    data/ is gitignored, so on a GitHub Actions runner the file never exists,
+    every run re-seeded the baseline, --quiet hid the message, and the watch
+    was dead while exiting 0.
     """
     live = {
         str(d["session_id"]): d.get("session_name") or ""
@@ -124,19 +149,31 @@ def cmd_watch(args) -> int:
         print("watch: LegiScan returned no sessions", file=sys.stderr)
         return 1
 
-    if not KNOWN_SESSIONS_PATH.exists():
+    conn = db.connect()
+    db.apply_schema(conn)
+    rows = conn.execute(
+        f"SELECT session_id, pending, pulled_at FROM {db.TABLES}.legiscan_sessions"
+    ).fetchall()
+    known = {r[0] for r in rows}
+    pending = {r[0] for r in rows if r[1] and r[2] is None}
+
+    if not known:
         # Everything LegiScan already lists is by definition not news.
-        save_known({"sessions": live, "pending": []})
+        with conn.cursor() as cur:
+            cur.executemany(
+                f"""INSERT INTO {db.TABLES}.legiscan_sessions
+                    (session_id, session_name, pending) VALUES (%s, %s, false)
+                    ON CONFLICT (session_id) DO NOTHING""",
+                [(sid, name) for sid, name in live.items()],
+            )
+        conn.commit()
         if not args.quiet:
             print(f"watch: baseline seeded with {len(live)} FL sessions")
+        conn.close()
         return 0
 
-    state = json.loads(KNOWN_SESSIONS_PATH.read_text(encoding="utf-8"))
-    known = state.get("sessions") or {}
-    pending = [s for s in (state.get("pending") or []) if s in live]
-
-    fresh = [s for s in sorted(live, key=int) if s not in known and s not in pending]
-    unpulled = [s for s in pending if not (DATA / f"FL_{s}").exists()]
+    fresh = [s for s in sorted(live, key=int) if s not in known]
+    unpulled = [s for s in sorted(pending, key=int) if s in live and s not in fresh]
 
     for sid in fresh:
         print(f"watch: NEW SESSION {sid}  {live[sid]}")
@@ -145,14 +182,20 @@ def cmd_watch(args) -> int:
         print(f"watch: {sid} {live[sid]} still not pulled - "
               f"python bills.py pull --session-id {sid}")
 
-    known.update(live)
-    save_known({
-        "sessions": known,
-        "pending": sorted(set(fresh) | set(unpulled), key=int),
-    })
+    with conn.cursor() as cur:
+        # Newly seen sessions arrive pending; ones already recorded keep their
+        # pending and pulled_at, so a name change upstream cannot silence a nag.
+        cur.executemany(
+            f"""INSERT INTO {db.TABLES}.legiscan_sessions
+                (session_id, session_name, pending) VALUES (%s, %s, true)
+                ON CONFLICT (session_id) DO UPDATE SET session_name = EXCLUDED.session_name""",
+            [(sid, live[sid]) for sid in sorted(live, key=int)],
+        )
+    conn.commit()
 
     if not fresh and not unpulled and not args.quiet:
         print(f"watch: no new FL sessions ({len(known)} known)")
+    conn.close()
     return 0
 
 
@@ -210,6 +253,9 @@ def cmd_pull(args) -> int:
     )
     print(f"extracted {len(names)} files to {out}")
     print(f"dataset_hash {d.get('dataset_hash')} recorded for week-over-week diffing")
+    # Clears this session's 'watch' nag. Recorded centrally rather than inferred
+    # from the extracted directory, which only exists on the machine that pulled.
+    mark_pulled(d["session_id"])
     return 0
 
 
