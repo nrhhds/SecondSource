@@ -20,6 +20,11 @@ on:
     # two runs ~12h apart, which holds year round.
     - cron: '0 11,23 * * *'
   workflow_dispatch:
+  # TEMPORARY - remove when this merges to main. workflow_dispatch is only
+  # dispatchable from the default branch, so pushing the branch is the only way
+  # to prove this workflow green before it lands.
+  push:
+    branches: [feat/ingest-on-actions]
 
 permissions:
   contents: read
