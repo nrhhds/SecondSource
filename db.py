@@ -33,6 +33,7 @@ silently reading the wrong schema.
 
 import os
 import sys
+from pathlib import Path
 
 import psycopg
 
@@ -40,14 +41,38 @@ import psycopg
 # a literal - it is a module constant, never user input.
 TABLES = "secondsource"
 
+ENV_PATH = Path(__file__).parent / ".env"
+
+
+def from_env_file(name: str) -> str | None:
+    """Read one name out of .env, same convention as bills.py's load_key().
+
+    The environment wins where it is set, which is how Actions injects the
+    secret. Locally the value lives in .env beside LEGISCAN_API_KEY, so a
+    plain `python ingest.py` works in a fresh shell without exporting anything
+    first - the alternative is a confusing "DATABASE_URL is not set" in a
+    checkout that plainly has it.
+    """
+    if not ENV_PATH.exists():
+        return None
+    for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        if key.strip() == name:
+            return val.strip().strip('"').strip("'") or None
+    return None
+
 
 def dsn() -> str:
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL") or from_env_file("DATABASE_URL")
     if not url:
         sys.exit(
             "DATABASE_URL is not set.\n"
             "  Actions: add it as a repository secret.\n"
-            "  Local:   export DATABASE_URL='postgresql://...pooler.supabase.com:5432/postgres'\n"
+            f"  Local:   add a DATABASE_URL= line to {ENV_PATH.name} (gitignored),\n"
+            "           or export it in the shell.\n"
             "Use the Supabase pooler host, not db.<ref>.supabase.co (IPv6-only)."
         )
     return url
@@ -62,3 +87,23 @@ def connect(autocommit: bool = False) -> psycopg.Connection:
     different backend sessions. Correctness over the microseconds.
     """
     return psycopg.connect(dsn(), autocommit=autocommit, prepare_threshold=None)
+
+
+SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+
+
+def apply_schema(conn) -> None:
+    """Apply schema.sql. Idempotent, and the ONLY definition of the schema.
+
+    ingest.py used to carry its own CREATE TABLE statements and render.py a
+    second set, so three places could disagree about the shape of the store -
+    and did. body_sha was added to ingest.py's DDL and had to be mirrored into
+    schema.sql by hand; the next column would have been another chance to
+    forget, failing at runtime with "column does not exist".
+
+    Reading the file means a column can only be added once. Cheap enough to run
+    on every ingest, so a fresh database needs no separate bootstrap step.
+    """
+    with conn.cursor() as cur:
+        cur.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
+    conn.commit()

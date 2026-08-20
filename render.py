@@ -22,14 +22,16 @@ import argparse
 import html
 import json
 import shutil
-import sqlite3
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from psycopg.rows import dict_row
+
+import db
+
 ROOT = Path(__file__).parent
-DB_PATH = ROOT / "data" / "articles.db"
 SOURCES_PATH = ROOT / "sources.json"
 ASSET_SRC = ROOT / "public"                    # shared style.css + fonts
 PROSE_SRC = ROOT / "public" / "proto"          # hand-written pages, not yet data-driven
@@ -50,64 +52,18 @@ CARD_SIGNALS = [
 # --------------------------------------------------------------------------
 # storage contract
 # --------------------------------------------------------------------------
-
-SCHEMA = """
--- One row per signal per article per rubric version. Long format on purpose:
--- adding a signal to the rubric must never require a schema migration, and
--- "every score is stamped with its rubric version" falls out of the key.
-CREATE TABLE IF NOT EXISTS scores (
-    article_id      TEXT NOT NULL,
-    rubric_version  TEXT NOT NULL,
-    signal          TEXT NOT NULL,
-    value           REAL,
-    value_text      TEXT,
-    judged          INTEGER NOT NULL DEFAULT 0,
-    confidence      REAL,
-    spread          REAL,
-    scored_at       TEXT NOT NULL,
-    PRIMARY KEY (article_id, rubric_version, signal)
-);
-CREATE INDEX IF NOT EXISTS idx_scores_article ON scores(article_id);
-
--- The receipts. A score with no receipt is an assertion, so these are stored
--- alongside rather than regenerated for display.
-CREATE TABLE IF NOT EXISTS receipts (
-    article_id      TEXT NOT NULL,
-    rubric_version  TEXT NOT NULL,
-    signal          TEXT NOT NULL,
-    paragraph       INTEGER,
-    quote           TEXT,
-    note            TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_receipts ON receipts(article_id, signal);
-
--- Enumerated reason codes only. No human approves a score; this is the sole
--- mechanism for pulling one, and every row is published.
-CREATE TABLE IF NOT EXISTS withdrawals (
-    article_id      TEXT NOT NULL,
-    code            TEXT NOT NULL
-        CHECK (code IN ('EXTRACTION_ERROR','WRONG_CLUSTER','DUPLICATE','LEGAL')),
-    withdrawn_at    TEXT NOT NULL,
-    detail          TEXT
-);
-
-CREATE TABLE IF NOT EXISTS clusters (
-    id          TEXT PRIMARY KEY,
-    label       TEXT,
-    bill_id     TEXT,
-    created_at  TEXT
-);
-CREATE TABLE IF NOT EXISTS cluster_members (
-    cluster_id  TEXT NOT NULL,
-    article_id  TEXT NOT NULL,
-    PRIMARY KEY (cluster_id, article_id)
-);
-"""
-
-
-def init_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
-    conn.commit()
+#
+# The scores, receipts, withdrawals, clusters and cluster_members DDL used to
+# live here as a SCHEMA string, and the articles/fetch_log DDL lived in
+# ingest.py. Both now live only in schema.sql, applied through
+# db.apply_schema(). Three copies of a schema is three chances for them to
+# disagree, which already happened once: body_sha was added to ingest.py and
+# had to be mirrored by hand.
+#
+# The reasoning that was attached to those tables is preserved in schema.sql -
+# the long format so adding a rubric signal needs no migration, the receipts
+# stored rather than regenerated, and the enumerated withdrawal codes as the
+# only way to pull a score.
 
 
 # --------------------------------------------------------------------------
@@ -451,31 +407,43 @@ def outlet_page(src: dict, rows: list, cards: str) -> str:
 # build
 # --------------------------------------------------------------------------
 
+def scalar(conn, sql: str):
+    """First column of the first row, for a connection using dict_row.
+
+    sqlite3.Row supports both positional and by-name access, so `fetchone()[0]`
+    worked on aggregates. psycopg's dict_row returns a plain dict, where [0] is
+    a KeyError - hence the `n` alias on every aggregate below.
+    """
+    return next(iter(conn.execute(sql).fetchone().values()))
+
+
 def fetch_scores(conn) -> tuple[dict, dict]:
     by_article = defaultdict(dict)
-    for r in conn.execute("SELECT * FROM scores"):
+    for r in conn.execute(f"SELECT * FROM {db.TABLES}.scores"):
         by_article[r["article_id"]][r["signal"]] = dict(r)
     by_signal = defaultdict(lambda: defaultdict(list))
-    for r in conn.execute("SELECT * FROM receipts ORDER BY paragraph"):
+    for r in conn.execute(f"SELECT * FROM {db.TABLES}.receipts ORDER BY paragraph"):
         by_signal[r["article_id"]][r["signal"]].append(dict(r))
     return by_article, by_signal
 
 
-def build(out: Path, limit: int, db_path: Path = DB_PATH) -> int:
-    if not db_path.exists():
-        print(f"no store at {db_path} - run ingest.py first", file=sys.stderr)
-        return 1
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    init_schema(conn)
+def build(out: Path, limit: int) -> int:
+    # dict_row is the psycopg equivalent of sqlite3.Row: rows index by column
+    # name, which every template below relies on.
+    conn = db.connect()
+    conn.row_factory = dict_row
+    db.apply_schema(conn)
 
     sources = load_sources()
     scores, receipts = fetch_scores(conn)
-    withdrawn = {r["article_id"]: dict(r) for r in conn.execute("SELECT * FROM withdrawals")}
+    withdrawn = {
+        r["article_id"]: dict(r)
+        for r in conn.execute(f"SELECT * FROM {db.TABLES}.withdrawals")
+    }
 
     rows = [dict(r) for r in conn.execute(
-        "SELECT * FROM articles ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT ?",
+        f"SELECT * FROM {db.TABLES}.articles"
+        " ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT %s",
         (limit,))]
 
     out.mkdir(parents=True, exist_ok=True)
@@ -511,9 +479,14 @@ def build(out: Path, limit: int, db_path: Path = DB_PATH) -> int:
                      scores.get(r["id"], {}), depth=0)
         for r in rows[:20])
     stats = {
-        "total": conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0],
-        "fulltext": conn.execute("SELECT COUNT(*) FROM articles WHERE fulltext_ok=1").fetchone()[0],
-        "scored": conn.execute("SELECT COUNT(DISTINCT article_id) FROM scores").fetchone()[0],
+        # scalar() rather than [0]: dict_row makes a row a dict keyed by column
+        # name, so positional indexing raises KeyError instead of returning the
+        # count.
+        "total": scalar(conn, f"SELECT COUNT(*) n FROM {db.TABLES}.articles"),
+        "fulltext": scalar(
+            conn, f"SELECT COUNT(*) n FROM {db.TABLES}.articles WHERE fulltext_ok=1"),
+        "scored": scalar(
+            conn, f"SELECT COUNT(DISTINCT article_id) n FROM {db.TABLES}.scores"),
         "withdrawn": len(withdrawn),
         "shown": min(len(rows), 20),
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ"),
@@ -526,15 +499,16 @@ def build(out: Path, limit: int, db_path: Path = DB_PATH) -> int:
     # Index pages the nav links to. Counts come from the whole store, not the
     # render window, so they don't shrink when --limit does.
     counts = {r["source_id"]: r["n"] for r in conn.execute(
-        "SELECT source_id, COUNT(*) n FROM articles GROUP BY source_id")}
+        f"SELECT source_id, COUNT(*) n FROM {db.TABLES}.articles GROUP BY source_id")}
     full = {r["source_id"]: r["n"] for r in conn.execute(
-        "SELECT source_id, COUNT(*) n FROM articles WHERE fulltext_ok=1 GROUP BY source_id")}
+        f"SELECT source_id, COUNT(*) n FROM {db.TABLES}.articles"
+        " WHERE fulltext_ok=1 GROUP BY source_id")}
     (out / "outlet.html").write_text(outlet_index_page(sources, counts, full), encoding="utf-8")
 
     clusters = [dict(r) for r in conn.execute(
-        """SELECT c.id, c.label, COUNT(m.article_id) n FROM clusters c
-           LEFT JOIN cluster_members m ON m.cluster_id = c.id
-           GROUP BY c.id ORDER BY n DESC""")]
+        f"""SELECT c.id, c.label, COUNT(m.article_id) n FROM {db.TABLES}.clusters c
+            LEFT JOIN {db.TABLES}.cluster_members m ON m.cluster_id = c.id
+            GROUP BY c.id, c.label ORDER BY n DESC""")]
     (out / "story.html").write_text(story_index_page(clusters), encoding="utf-8")
     written += 2
 
@@ -568,10 +542,10 @@ def main() -> int:
                     help="output directory (default: public/site)")
     ap.add_argument("--limit", type=int, default=200,
                     help="most recent N articles to render (default: 200)")
-    ap.add_argument("--db", type=Path, default=DB_PATH,
-                    help="article store to read (default: data/articles.db)")
+    # --db is gone with SQLite: there is one store now, addressed by
+    # DATABASE_URL, and pointing this at a file would silently render nothing.
     args = ap.parse_args()
-    return build(args.out, args.limit, args.db)
+    return build(args.out, args.limit)
 
 
 if __name__ == "__main__":
