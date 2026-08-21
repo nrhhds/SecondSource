@@ -62,13 +62,13 @@
     {
       "id": "nsf_wire",
       "name": "News Service of Florida (direct wire, headlines only)",
-      "feed": "https://newsserviceflorida.com/search/?q=&t=article&f=rss",
+      "feed": "https://www.newsserviceflorida.com/search/?q=&t=article&f=rss",
       "role": "validation",
-      "status": "blocked",
+      "status": "headlines_only",
       "fulltext": false,
       "paywall": "subscription",
       "prior_lean": "wire",
-      "notes": "NSF's own headlines, direct from the wire. The control for calibration test #1: diff against the republished titles in 'nsf' to detect retitling, and against what 'nsf' does NOT carry to measure the republisher's selection - that is what validate_anchor.py reads. DO NOT RE-AUDIT: reactivated headlines_only on 2026-08-21 to grow the sample and immediately 429'd, from a residential IP and from an Actions runner (Azure eastus) alike. Both times every other source returned 200 in the same run, so it is this host, not our network and not our UA. The limiter is custom - text/plain body carrying client_ip and request_id, no Retry-After, no cf-ray - and it is recent: the same honest UA got 200 here on 2026-08-18 and the 15 stored headlines were pulled 08-13 to 08-17. Set 'blocked' rather than active because an errored active source alarms health.py on every run. The 15 headlines remain usable; the sample is frozen, not lost. Route to a bigger sample is the second republisher (tampabay.com) via the nsf@<outlet> scheme, which also gives body text this feed never had. Never score: headline-only."
+      "notes": "NSF's own headlines, direct from the wire. The control for calibration test #1: diff against the republished titles in 'nsf' to detect retitling, and against what 'nsf' does NOT carry to measure the republisher's selection - that is what validate_anchor.py reads. USE THE www HOST. The apex newsserviceflorida.com 429s every request with a custom text/plain limiter (client_ip + request_id, no Retry-After); www.newsserviceflorida.com serves 200 to the same UA from the same IP in the same second. On 2026-08-21 this was briefly and wrongly marked 'blocked' - the controls run were other-source and other-IP, which both came back consistent with a real block and neither varied the hostname. Same shape as the Florida Politics misdiagnosis in LESSONS.md: the block was ours. Rolling 10-item window at roughly 5 items/day, so twice-daily polling covers about two days of wire output - it will not backfill, the sample only grows forward. fulltext false is load-bearing: it gates off article fetching in ingest.py, so only the RSS is read and the paywalled article pages are never crawled. Never score: headline-only, no body text."
     },
     {
       "id": "tallahasseereports",

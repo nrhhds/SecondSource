@@ -58,9 +58,17 @@ import difflib
 import re
 import sys
 import unicodedata
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import db
+
+# A wire item younger than this cannot be called "not carried": the republisher
+# runs about a day behind the wire (Monday's copy appears Tuesday), and our own
+# pull of it lags by up to half a day again. Counting the last two days as
+# non-carriage understates the carriage rate on every run, and understates it
+# more the fresher the wire sample is - which, now that nsf_wire only grows
+# forward, is a bias that would grow rather than wash out.
+MATURITY_DAYS = 3
 
 # Wire items that are standing columns or daily agendas rather than reported
 # stories. A republisher skipping these is making an editorial choice about
@@ -138,6 +146,8 @@ def main() -> int:
                     help="days either side of the wire date to search")
     ap.add_argument("--verbose", action="store_true",
                     help="show near-miss candidates for unmatched items")
+    ap.add_argument("--maturity", type=int, default=MATURITY_DAYS,
+                    help="wire items younger than this are too recent to judge")
     args = ap.parse_args()
 
     with db.connect() as conn:
@@ -155,7 +165,8 @@ def main() -> int:
     print(f"  match window   : +/- {args.window} days")
     print()
 
-    exact, retitled, absent_routine, absent_story = [], [], [], []
+    exact, retitled, absent_routine, absent_story, too_recent = [], [], [], [], []
+    mature_before = datetime.now(timezone.utc) - timedelta(days=args.maturity)
 
     for pub, title, _url in wire:
         lo = pub - timedelta(days=args.window)
@@ -175,6 +186,8 @@ def main() -> int:
             retitled.append((pub, title, best))
         elif is_routine(title):
             absent_routine.append((pub, title, best))
+        elif pub > mature_before:
+            too_recent.append((pub, title, best))
         else:
             absent_story.append((pub, title, best))
 
@@ -192,13 +205,18 @@ def main() -> int:
     show("REVIEW - close but not identical, judge by eye", retitled, True)
     show("NOT CARRIED - standing column or daily agenda", absent_routine, False)
     show("NOT CARRIED - reported story", absent_story, args.verbose)
+    show(f"TOO RECENT to judge - under {args.maturity}d, republisher runs behind",
+         too_recent, False)
 
     carried = len(exact) + len(retitled)
-    stories = len(wire) - len(absent_routine)
+    stories = len(wire) - len(absent_routine) - len(too_recent)
 
     print("-" * 70)
-    print(f"  carried by republisher : {carried}/{len(wire)} wire items"
-          f"  ({carried}/{stories} excluding standing columns)")
+    print(f"  judged                 : {stories} reported wire stories "
+          f"({len(absent_routine)} standing columns and {len(too_recent)} too "
+          f"recent excluded from {len(wire)})")
+    print(f"  carried by republisher : {carried}/{stories}"
+          + (f"  = {100 * carried // stories}%" if stories else ""))
     if carried:
         print(f"  headline fidelity      : {len(exact)}/{carried} verbatim, "
               f"{len(retitled)} to review")
