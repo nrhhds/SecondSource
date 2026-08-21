@@ -64,11 +64,11 @@
       "name": "News Service of Florida (direct wire, headlines only)",
       "feed": "https://newsserviceflorida.com/search/?q=&t=article&f=rss",
       "role": "validation",
-      "status": "archive",
+      "status": "headlines_only",
       "fulltext": false,
       "paywall": "subscription",
       "prior_lean": "wire",
-      "notes": "Titles pulled direct from the wire before 'nsf' was repointed at a republisher. Kept, not deleted, because these are NSF's own headlines: diff them against the republished titles to detect retitling. If a republisher retitles, 'nsf' is scoring the republisher's edit and the near-zero anchor is invalid. status archive - not fetched. Never score: headline-only, no body text."
+      "notes": "NSF's own headlines, direct from the wire. The control for calibration test #1: diff against the republished titles in 'nsf' to detect retitling, and against what 'nsf' does NOT carry to measure the republisher's selection. Reactivated 2026-08-21 (was 'archive'); the frozen 15-headline sample over 3 days was too thin to characterise selection, and validate_anchor.py's basis grows one wire day per run. fulltext false is load-bearing - it gates off article fetching in ingest.py, so only the RSS is read and the paywalled article pages are never crawled. Never score: headline-only, no body text, and it must not enter the scoreable roster."
     },
     {
       "id": "tallahasseereports",
