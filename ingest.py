@@ -192,6 +192,32 @@ def ingest_paged(conn, src: dict, max_pages: int) -> tuple[int, int, str | None]
     return seen_entries, total_new, None
 
 
+def ingest_multi(conn, src: dict) -> tuple[int, int, str | None]:
+    """Ingest one source_id from several feeds.
+
+    A republisher that files wire copy under its own section headings has no
+    single feed carrying all of it - WUFT runs NSF through /politics.rss and
+    /education.rss, and its index.rss and news.rss are both empty. Both sections
+    are polled into one source_id and deduplicated by URL like any other feed.
+
+    One failing section does not abort the rest: the sections that answered
+    still land, and the first error is returned so health.py still sees that
+    something is wrong rather than reading a partial pull as a healthy one.
+    """
+    feed_delay = delay_for(src, DELAY_BETWEEN_FEEDS)
+    feeds = src["feeds"]
+    seen = total_new = 0
+    first_err = None
+    for i, url in enumerate(feeds):
+        entries, new_rows, err = ingest_source(conn, src, feed_url=url)
+        seen += entries
+        total_new += new_rows
+        first_err = first_err or err
+        if i < len(feeds) - 1:
+            time.sleep(feed_delay)
+    return seen, total_new, first_err
+
+
 def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, int, str | None]:
     feed_url = feed_url or src.get("feed")
     if not feed_url:
@@ -215,12 +241,29 @@ def ingest_source(conn, src: dict, feed_url: str | None = None) -> tuple[int, in
     # of that row deterministic instead of a race between the two feeds.
     excluded = [a.strip().lower() for a in (src.get("exclude_authors") or [])]
 
+    # The mirror of exclude_authors, for a source that is a filter over another
+    # outlet's feed rather than an outlet in its own right. WUFT files wire copy
+    # through its own section feeds alongside its own reporting; only the wire
+    # copy belongs to nsf@wuft.
+    #
+    # Matched EXACTLY, where exclude_authors matches on substring, and the
+    # asymmetry is deliberate. Excluding is defensive - catch every spelling of
+    # a byline you want gone. Including is a provenance claim, and a substring
+    # admits "Anthony Montalto, Aileyahu Shanes, News Service of Florida":
+    # station staff co-writing with the wire, which is hybrid copy and not the
+    # wire text this source_id promises. Exact also fails closed, so a byline
+    # restyle yields nothing and health.py reports it, rather than quietly
+    # importing a public radio station's own journalism into the wire anchor.
+    included = [a.strip().lower() for a in (src.get("include_authors") or [])]
+
     for entry in entries:
         url = getattr(entry, "link", None)
         if not url:
             continue
         author = entry_author(entry).lower()
         if any(x in author for x in excluded):
+            continue
+        if included and author.strip() not in included:
             continue
         aid = article_id(url)
 
@@ -391,7 +434,9 @@ def main():
 
     for src in sources:
         pages = int(src.get("catchup_pages") or 1)
-        if pages > 1 and src.get("feed"):
+        if src.get("feeds"):
+            entries, new_rows, err = ingest_multi(conn, src)
+        elif pages > 1 and src.get("feed"):
             entries, new_rows, err = ingest_paged(conn, src, pages)
         else:
             entries, new_rows, err = ingest_source(conn, src)

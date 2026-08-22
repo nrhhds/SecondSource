@@ -164,6 +164,17 @@ def check(conn, src: dict, now: datetime) -> dict:
                 state = max(state, WARN, key=RANK.get)
                 notes.append(f"full text extracting on {rate:.0%} of last {n}")
 
+    # A validation source is a control, not coverage. WUFT files 2-5 wire items
+    # a month, so it reads as permanently stale against any cadence threshold
+    # built for a daily outlet, and it would fail the workflow every run for
+    # behaving exactly as expected. Nothing here is scored and no article is
+    # lost when it goes quiet, so it must not be able to red the build - but it
+    # stays visible at WARN rather than being silenced, because a control that
+    # has quietly stopped is worth knowing about BEFORE calibration leans on it.
+    if src.get("role") == "validation" and state == ALARM:
+        state = WARN
+        notes.append("capped at WARN - validation source, not coverage")
+
     return {"id": sid, "state": state, "quiet": quiet, "notes": notes}
 
 
